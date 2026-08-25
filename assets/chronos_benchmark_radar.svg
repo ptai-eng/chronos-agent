@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="100%" height="100%" role="img" aria-labelledby="radar-title radar-desc" style="background: #090d16; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <title id="radar-title">CHRONOS Capability Comparison Radar</title>
+  <desc id="radar-desc">Radar chart comparing CHRONOS 4D-Agent against Traditional Linters and Standard AI Coding Assistants across 5 dimensions.</desc>
+
+  <!-- Header -->
+  <text x="48" y="44" fill="#f8fafc" font-size="20" font-weight="700" letter-spacing="-0.02em">CAPABILITY COMPARISON : 5-AXIS RADAR</text>
+  <text x="48" y="66" fill="#94a3b8" font-size="12" font-family="monospace">BENCHMARKING 4D LIVING CODE INTELLIGENCE VS STATIC LINTHOOD &amp; STANDARD AI AGENTS</text>
+
+  <!-- ==================== RADAR GRID (Center: 300, 260; R=150) ==================== -->
+  <g fill="none" stroke="#1e293b" stroke-width="1.2">
+    <!-- 20% -->
+    <polygon points="300,230 328,251 318,284 282,284 271,251" stroke-dasharray="2,2"/>
+    <!-- 40% -->
+    <polygon points="300,200 357,241 335,309 265,309 243,241" stroke-dasharray="2,2"/>
+    <!-- 60% -->
+    <polygon points="300,170 386,232 353,333 247,333 214,232" stroke-dasharray="2,2"/>
+    <!-- 80% -->
+    <polygon points="300,140 414,223 371,357 229,357 186,223" stroke-dasharray="2,2"/>
+    <!-- 100% -->
+    <polygon points="300,110 443,214 388,381 212,381 157,214" stroke="#334155" stroke-width="1.5"/>
+
+    <!-- Radial Spokes -->
+    <line x1="300" y1="260" x2="300" y2="110" stroke="#334155"/>
+    <line x1="300" y1="260" x2="443" y2="214" stroke="#334155"/>
+    <line x1="300" y1="260" x2="388" y2="381" stroke="#334155"/>
+    <line x1="300" y1="260" x2="212" y2="381" stroke="#334155"/>
+    <line x1="300" y1="260" x2="157" y2="214" stroke="#334155"/>
+  </g>
+
+  <!-- Axis Labels -->
+  <g fill="#94a3b8" font-size="11" font-family="monospace" font-weight="600">
+    <text x="300" y="96" text-anchor="middle" fill="#38bdf8">1. AST GRAPH DEPTH</text>
+    <text x="460" y="218" text-anchor="start" fill="#38bdf8">2. RUNTIME TELEMETRY</text>
+    <text x="400" y="402" text-anchor="start" fill="#38bdf8">3. MUTATION ARENA</text>
+    <text x="200" y="402" text-anchor="end" fill="#38bdf8">4. BLAST-RADIUS HEATMAP</text>
+    <text x="140" y="218" text-anchor="end" fill="#38bdf8">5. PRE-TOOL SAFETY GATE</text>
+  </g>
+
+  <!-- ==================== RADAR DATA SERIES ==================== -->
+
+  <!-- Series 2: Traditional Linters (ESLint / SonarQube) -> [75%, 0%, 0%, 20%, 15%] -->
+  <!-- V0: 300,149; V1: 300,260; V2: 300,260; V3: 282,284; V4: 279,253 -->
+  <polygon points="300,148 300,260 300,260 282,284 279,253" 
+           fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-width="1.8"/>
+
+  <!-- Series 3: Vanilla AI Assistants (Copilot / Cursor) -> [40%, 10%, 0%, 15%, 30%] -->
+  <polygon points="300,200 314,255 300,260 287,278 257,246" 
+           fill="#a855f7" fill-opacity="0.15" stroke="#a855f7" stroke-width="1.8"/>
+
+  <!-- Series 1: CHRONOS-AGENT -> [95%, 90%, 95%, 98%, 92%] -->
+  <polygon points="300,117 428,218 384,375 214,379 168,218" 
+           fill="#0ea5e9" fill-opacity="0.30" stroke="#38bdf8" stroke-width="2.5"/>
+
+  <!-- Glowing Points on CHRONOS -->
+  <circle cx="300" cy="117" r="4" fill="#38bdf8"/>
+  <circle cx="428" cy="218" r="4" fill="#38bdf8"/>
+  <circle cx="384" cy="375" r="4" fill="#38bdf8"/>
+  <circle cx="214" cy="379" r="4" fill="#38bdf8"/>
+  <circle cx="168" cy="218" r="4" fill="#38bdf8"/>
+
+  <!-- ==================== SIDE COMPARISON PANEL ==================== -->
+  <g transform="translate(560, 100)">
+    <!-- Legend Item 1: CHRONOS -->
+    <rect x="0" y="0" width="350" height="90" rx="8" fill="#131c2e" stroke="#38bdf8" stroke-width="1.5"/>
+    <circle cx="20" cy="24" r="6" fill="#38bdf8"/>
+    <text x="36" y="28" fill="#f8fafc" font-size="14" font-weight="700">CHRONOS 4D-Agent</text>
+    <text x="280" y="28" fill="#38bdf8" font-size="12" font-family="monospace" font-weight="700">SCORE: 94%</text>
+    <text x="20" y="52" fill="#94a3b8" font-size="11">AST Graph &bull; V8 CDP/eBPF &bull; Mutation Gate &bull; 0-Crash Blast-Radius</text>
+    <text x="20" y="70" fill="#64748b" font-size="10" font-family="monospace">Full multidimensional runtime and static protection.</text>
+
+    <!-- Legend Item 2: Traditional Linters -->
+    <rect x="0" y="106" width="350" height="74" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.2"/>
+    <circle cx="20" cy="128" r="6" fill="#f59e0b"/>
+    <text x="36" y="132" fill="#f8fafc" font-size="13" font-weight="600">Static Linters (ESLint, Sonar)</text>
+    <text x="280" y="132" fill="#f59e0b" font-size="12" font-family="monospace">SCORE: 22%</text>
+    <text x="20" y="156" fill="#94a3b8" font-size="11">Static syntax only. Blind to runtime memory and mutation faults.</text>
+
+    <!-- Legend Item 3: Vanilla AI Assistants -->
+    <rect x="0" y="196" width="350" height="74" rx="8" fill="#181528" stroke="#1e293b" stroke-width="1.2"/>
+    <circle cx="20" cy="218" r="6" fill="#a855f7"/>
+    <text x="36" y="222" fill="#f8fafc" font-size="13" font-weight="600">Vanilla AI Agents (Prompt-only)</text>
+    <text x="280" y="222" fill="#a855f7" font-size="12" font-family="monospace">SCORE: 19%</text>
+    <text x="20" y="246" fill="#94a3b8" font-size="11">Text autocomplete. Hallucinates breaking changes without gates.</text>
+  </g>
+</svg>

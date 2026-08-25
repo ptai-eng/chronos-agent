@@ -1,0 +1,136 @@
+//! # Tool: chronos_analyze_file
+//!
+//! Parse a TypeScript file and bulk-insert all symbols into the 4D graph.
+//! The parser returns `ChronosNode` objects directly — no remapping needed.
+
+use crate::protocol::CallToolResult;
+use crate::state::SharedState;
+use chronos_core::{
+    ast::ts_parser::TypeScriptParser,
+    graph::schema::{ChronosEdge, EdgeKind},
+};
+use serde_json::Value;
+use std::path::PathBuf;
+use tracing::warn;
+
+pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> CallToolResult {
+    let file_path = match params.as_ref()
+        .and_then(|p| p.get("file_path"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+    {
+        Some(p) => p,
+        None => return CallToolResult::error("Missing required parameter: file_path"),
+    };
+
+    let abs_path = {
+        let st = state.read().await;
+        let p = PathBuf::from(&file_path);
+        if p.is_absolute() { p } else { st.workspace_root.join(&p) }
+    };
+
+    if !abs_path.exists() {
+        return CallToolResult::error(format!("File not found: {}", abs_path.display()));
+    }
+
+    // TypeScriptParser::new() returns Result<TypeScriptParser>
+    let mut parser = match TypeScriptParser::new() {
+        Ok(p) => p,
+        Err(e) => return CallToolResult::error(format!("Parser init: {}", e)),
+    };
+
+    let parsed = match parser.parse_file(&abs_path) {
+        Ok(m) => m,
+        Err(e) => return CallToolResult::error(format!("Parse failed: {}", e)),
+    };
+
+    let fn_count = parsed.functions.len();
+    let class_count = parsed.classes.len();
+    let route_count = parsed.api_routes.len();
+    let test_count = parsed.test_cases.len();
+    let call_ref_count = parsed.call_refs.len();
+    let import_count = parsed.import_refs.len();
+    // Collect all nodes upfront to avoid double-borrow of `parsed`
+    let all_nodes: Vec<chronos_core::graph::schema::ChronosNode> =
+        parsed.all_nodes().into_iter().cloned().collect();
+    let _total_symbols = all_nodes.len();
+
+    let mut st = state.write().await;
+    let mut inserted = 0usize;
+    let mut edges_added = 0usize;
+
+    // Bulk insert all nodes (functions, classes, routes, test cases)
+    for node in &all_nodes {
+        st.graph.add_node(node.clone());
+        inserted += 1;
+    }
+
+    // Insert call reference edges (A calls B)
+    for call_ref in &parsed.call_refs {
+        // Find matching node IDs by name — best effort
+        use chronos_core::graph::schema::NodeKind;
+        let caller_id = st.graph
+            .nodes_by_kind(&NodeKind::Function)
+            .into_iter()
+            .chain(st.graph.nodes_by_kind(&NodeKind::Class).into_iter())
+            .find(|n| n.name == call_ref.caller_name)
+            .map(|n| n.id.clone());
+
+        let callee_id = st.graph
+            .nodes_by_kind(&NodeKind::Function)
+            .into_iter()
+            .chain(st.graph.nodes_by_kind(&NodeKind::Class).into_iter())
+            .find(|n| n.name == call_ref.callee_name)
+            .map(|n| n.id.clone());
+
+        if let (Some(caller), Some(callee)) = (caller_id, callee_id) {
+            if st.graph.add_edge(&caller, &callee, ChronosEdge::new(EdgeKind::Calls)).is_ok() {
+                edges_added += 1;
+            }
+        }
+    }
+
+    if let Some(ref db) = st.db {
+        if let Err(e) = db.sync_from_graph(&st.graph) {
+            warn!("KuzuDB sync failed: {}", e);
+        }
+    }
+
+    let broker = st.broker.clone();
+    
+    let report = st.graph.status_report();
+
+    // Drop lock before await
+    drop(st);
+
+    // Index in contract broker for real-time contract watching
+    if let Err(e) = broker.index_file(&abs_path).await {
+        warn!("Contract broker indexing failed for {}: {}", abs_path.display(), e);
+    }
+
+    CallToolResult::text(format!(
+        r#"✅ **CHRONOS: File Analyzed**
+
+**File:** `{file_path}`
+**Symbols extracted:**
+  - Functions: {fn_count}
+  - Classes: {class_count}
+  - API routes: {route_count}
+  - Test cases: {test_count}
+  - Call references: {call_ref_count}
+  - Import references: {import_count}
+
+**Graph state:**
+  - Total nodes: {} (functions: {}, tests: {})
+  - New nodes inserted: {inserted}
+  - New call edges added: {edges_added}
+  - Hydrated: {}/{} nodes
+
+Next steps:
+- `chronos_query_hotspots` → performance bottlenecks
+- `chronos_blast_radius` {{ symbol_name: "functionName" }} → change impact
+- `chronos_contract_status` → check for breaking change alerts"#,
+        report.total_nodes, report.function_nodes, report.test_nodes,
+        report.hydrated_nodes, report.total_nodes,
+    ))
+}

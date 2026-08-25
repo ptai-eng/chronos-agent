@@ -1,0 +1,60 @@
+{
+  "name": "chronos-agent",
+  "displayName": "CHRONOS Agent",
+  "description": "4D Knowledge Graph — Real-time blast-radius + mutation score",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:javascript"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "chronos.analyze",
+        "title": "CHRONOS: Analyze File"
+      },
+      {
+        "command": "chronos.showHotspots",
+        "title": "CHRONOS: Show Hotspots"
+      },
+      {
+        "command": "chronos.blastRadius",
+        "title": "CHRONOS: Blast Radius"
+      }
+    ],
+    "configuration": {
+      "title": "CHRONOS",
+      "properties": {
+        "chronos.mcpBinaryPath": {
+          "type": "string",
+          "description": "Path to chronos-mcp.exe binary"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/vscode": "^1.134.0",
+    "typescript": "^7.0.2",
+    "vscode-languageclient": "^10.1.0"
+  },
+  "dependencies": {
+    "axios": "^1.19.0"
+  }
+}

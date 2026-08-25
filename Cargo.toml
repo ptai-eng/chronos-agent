@@ -1,0 +1,87 @@
+[workspace]
+members = [
+    "chronos-core",
+    "chronos-mcp",
+    "chronos-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["CHRONOS-AGENT Project"]
+license = "MIT"
+description = "4D Dynamic Knowledge Graph + Runtime Telemetry + Mutation Testing Agent Harness"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Graph data structure
+petgraph = { version = "0.6", features = ["serde-1"] }
+
+# Tree-sitter AST parsing
+tree-sitter = "0.22"
+tree-sitter-typescript = "0.21"
+tree-sitter-python = "0.21"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File watching
+notify = "6"
+
+# CLI framework
+clap = { version = "4", features = ["derive"] }
+
+# Terminal UI
+ratatui = "0.28"
+
+# Crossterm for terminal backend
+crossterm = "0.28"
+crossbeam-channel = "0.5.12"
+kuzu = "0.9"
+
+# Process management
+shared_child = "1"
+
+# Hashing
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
+
+# WebSocket client (CDP V8 Inspector)
+tokio-tungstenite = { version = "0.23", features = ["native-tls"] }
+futures-util = "0.3"
+url = "2"
+
+# HTTP client for CDP
+reqwest = { version = "0.12", features = ["json"] }
+
+# UUID
+uuid = { version = "1", features = ["v4"] }
+
+# Timestamps
+chrono = { version = "0.4", features = ["serde"] }
+
+# Indexmap (ordered HashMap)
+indexmap = { version = "2", features = ["serde"] }
+
+# Rayon for parallel mutation testing
+rayon = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0
+debug = true

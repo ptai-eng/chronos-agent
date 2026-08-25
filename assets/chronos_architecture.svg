@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="100%" height="100%" role="img" aria-labelledby="arch-title arch-desc" style="background: #090d16; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <title id="arch-title">CHRONOS-AGENT 4D Architecture</title>
+  <desc id="arch-desc">Multi-tier architecture showing inputs feeding into the 4D Knowledge Graph, powering Mutation Arena, Contract Broker, Blast-Radius engine, and MCP Server.</desc>
+
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="amber-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d97706" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="purple-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.2"/>
+    </linearGradient>
+
+    <!-- Markers -->
+    <marker id="arrow-cyan" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#c084fc"/>
+    </marker>
+    <marker id="arrow-muted" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Background grid decoration -->
+  <g opacity="0.15">
+    <line x1="40" y1="0" x2="40" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="280" y1="0" x2="280" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="640" y1="0" x2="640" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="920" y1="0" x2="920" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+  </g>
+
+  <!-- Header Section -->
+  <text x="48" y="44" fill="#f8fafc" font-size="20" font-weight="700" letter-spacing="-0.02em">CHRONOS-AGENT : SYSTEM ARCHITECTURE</text>
+  <text x="48" y="66" fill="#94a3b8" font-size="12" font-family="monospace">4D KNOWLEDGE GRAPH &bull; RUNTIME TELEMETRY &bull; MULTI-PILLAR SAFETY ENGINE</text>
+
+  <!-- ==================== CONNECTORS (Draw first for proper z-index) ==================== -->
+  <g fill="none" stroke-width="1.5">
+    <!-- Input to 4D Core Graph -->
+    <path d="M 232 144 L 320 144 L 320 220 L 360 220" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+    <path d="M 232 244 L 360 244" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+    <path d="M 232 344 L 320 344 L 320 268 L 360 268" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+
+    <!-- 4D Graph to Pillars -->
+    <path d="M 576 220 L 620 220 L 620 144 L 664 144" stroke="#fbbf24" marker-end="url(#arrow-amber)"/>
+    <path d="M 576 244 L 664 244" stroke="#fbbf24" marker-end="url(#arrow-amber)"/>
+    <path d="M 576 268 L 620 268 L 620 344 L 664 344" stroke="#fbbf24" marker-end="url(#arrow-amber)"/>
+
+    <!-- Core to Interface Layer -->
+    <path d="M 468 316 L 468 412" stroke="#c084fc" marker-end="url(#arrow-purple)"/>
+    <path d="M 780 392 L 780 432 L 676 432" stroke="#64748b" stroke-dasharray="4,4" marker-end="url(#arrow-muted)"/>
+  </g>
+
+  <!-- ==================== SECTION 1: INGESTION TIER ==================== -->
+  <g>
+    <text x="48" y="104" fill="#38bdf8" font-size="11" font-weight="700" font-family="monospace" letter-spacing="0.1em">01 / DUAL INGESTION</text>
+    
+    <!-- Node 1: AST Parser -->
+    <rect x="48" y="116" width="184" height="56" rx="8" fill="#131c2e" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="48" y="116" width="4" height="56" rx="2" fill="#38bdf8"/>
+    <text x="64" y="138" fill="#f8fafc" font-size="13" font-weight="600">Tree-sitter AST Parser</text>
+    <text x="64" y="156" fill="#64748b" font-size="10" font-family="monospace">TypeScript &bull; Call Graph &bull; Scope</text>
+
+    <!-- Node 2: CDP V8 Profiler -->
+    <rect x="48" y="216" width="184" height="56" rx="8" fill="#131c2e" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="48" y="216" width="4" height="56" rx="2" fill="#38bdf8"/>
+    <text x="64" y="238" fill="#f8fafc" font-size="13" font-weight="600">CDP V8 Runtime Profiler</text>
+    <text x="64" y="256" fill="#64748b" font-size="10" font-family="monospace">node --inspect &bull; WebSocket p95</text>
+
+    <!-- Node 3: eBPF Kernel Probe -->
+    <rect x="48" y="316" width="184" height="56" rx="8" fill="#131c2e" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="48" y="316" width="4" height="56" rx="2" fill="#38bdf8"/>
+    <text x="64" y="338" fill="#f8fafc" font-size="13" font-weight="600">eBPF Kernel Probes</text>
+    <text x="64" y="356" fill="#64748b" font-size="10" font-family="monospace">Linux/WSL2 &bull; Low-overhead OS</text>
+  </g>
+
+  <!-- ==================== SECTION 2: 4D ENGINE CORE ==================== -->
+  <g>
+    <text x="360" y="104" fill="#a855f7" font-size="11" font-weight="700" font-family="monospace" letter-spacing="0.1em">02 / CORE KNOWLEDGE ENGINE</text>
+
+    <!-- Central 4D Container -->
+    <rect x="360" y="116" width="216" height="200" rx="12" fill="#15132a" stroke="#a855f7" stroke-width="1.5"/>
+    
+    <text x="380" y="148" fill="#f8fafc" font-size="15" font-weight="700">4D Knowledge Graph</text>
+    <text x="380" y="168" fill="#c084fc" font-size="11" font-family="monospace">Static AST &oplus; Live Telemetry</text>
+
+    <line x1="380" y1="184" x2="556" y2="184" stroke="#2e234d" stroke-width="1"/>
+
+    <!-- In-memory engine -->
+    <rect x="380" y="196" width="176" height="42" rx="6" fill="#201a3d" stroke="#3b2d69" stroke-width="1"/>
+    <text x="392" y="214" fill="#e2e8f0" font-size="11" font-weight="600">Petgraph Memory Arena</text>
+    <text x="392" y="228" fill="#a855f7" font-size="9" font-family="monospace">&lt;15ms Complex Query Engine</text>
+
+    <!-- Persistent Storage -->
+    <rect x="380" y="248" width="176" height="42" rx="6" fill="#201a3d" stroke="#3b2d69" stroke-width="1"/>
+    <text x="392" y="266" fill="#e2e8f0" font-size="11" font-weight="600">KuzuDB Embedded Store</text>
+    <text x="392" y="280" fill="#a855f7" font-size="9" font-family="monospace">Disk-persisted Graph Database</text>
+  </g>
+
+  <!-- ==================== SECTION 3: ANALYTIC PILLARS ==================== -->
+  <g>
+    <text x="664" y="104" fill="#fbbf24" font-size="11" font-weight="700" font-family="monospace" letter-spacing="0.1em">03 / SAFETY &amp; QUALITY PILLARS</text>
+
+    <!-- Pillar 2: Mutation Arena -->
+    <rect x="664" y="116" width="232" height="56" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="664" y="116" width="4" height="56" rx="2" fill="#fbbf24"/>
+    <text x="680" y="138" fill="#f8fafc" font-size="13" font-weight="600">Targeted Mutation Arena</text>
+    <text x="680" y="156" fill="#64748b" font-size="10" font-family="monospace">80%/90% Kill Gate &bull; Fault Injection</text>
+
+    <!-- Pillar 3: Semantic Contract Broker -->
+    <rect x="664" y="216" width="232" height="56" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="664" y="216" width="4" height="56" rx="2" fill="#fbbf24"/>
+    <text x="680" y="238" fill="#f8fafc" font-size="13" font-weight="600">Semantic Contract Broker</text>
+    <text x="680" y="256" fill="#64748b" font-size="10" font-family="monospace">Pre-Tool Gate &bull; 30ms Watcher</text>
+
+    <!-- Pillar 4: Blast-Radius Heatmap -->
+    <rect x="664" y="316" width="232" height="56" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="664" y="316" width="4" height="56" rx="2" fill="#fbbf24"/>
+    <text x="680" y="338" fill="#f8fafc" font-size="13" font-weight="600">Blast-Radius Heatmap</text>
+    <text x="680" y="356" fill="#64748b" font-size="10" font-family="monospace">3-Tier Risk Zones &bull; 30s Markdown</text>
+  </g>
+
+  <!-- ==================== SECTION 4: UNIFIED INTERFACE ==================== -->
+  <g>
+    <rect x="280" y="412" width="396" height="72" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+    
+    <text x="300" y="438" fill="#38bdf8" font-size="14" font-weight="700">Universal MCP Server (JSON-RPC 2.0)</text>
+    <text x="300" y="456" fill="#94a3b8" font-size="11">5 Core Tools &bull; Zero-Latency Stdio Communication</text>
+    <text x="300" y="472" fill="#64748b" font-size="10" font-family="monospace">Antigravity | Cursor | Claude | Codex | Cline | Windsurf | Zed</text>
+
+    <rect x="696" y="412" width="200" height="72" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+    <text x="712" y="438" fill="#fbbf24" font-size="14" font-weight="700">VS Code Extension</text>
+    <text x="712" y="456" fill="#94a3b8" font-size="11">Interactive IDE Radar</text>
+    <text x="712" y="472" fill="#64748b" font-size="10" font-family="monospace">On-save Static &amp; Telemetry</text>
+  </g>
+</svg>

@@ -1,0 +1,31 @@
+# Rust / Cargo
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# KuzuDB local database files
+*.kuzu
+.kuzu/
+kuzu_db/
+
+# Node / VS Code Extension
+node_modules/
+/chronos-vscode/node_modules/
+/chronos-vscode/out/
+*.vsix
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+
+# Environment
+.env
+.env.local

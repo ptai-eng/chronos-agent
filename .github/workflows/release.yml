@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: windows-x64
+            extension: .exe
+            archive_ext: .zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: linux-x64
+            extension: ''
+            archive_ext: .tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: macos-x64
+            extension: ''
+            archive_ext: .tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: macos-arm64
+            extension: ''
+            archive_ext: .tar.gz
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --workspace --target ${{ matrix.target }}
+        
+      - name: Prepare Artifacts (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p release-binaries
+          cp target/${{ matrix.target }}/release/chronos-mcp release-binaries/
+          cp target/${{ matrix.target }}/release/chronos release-binaries/
+          tar -czvf chronos-${{ matrix.name }}${{ matrix.archive_ext }} -C release-binaries .
+
+      - name: Prepare Artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir release-binaries
+          copy target\${{ matrix.target }}\release\chronos-mcp.exe release-binaries\
+          copy target\${{ matrix.target }}\release\chronos.exe release-binaries\
+          Compress-Archive -Path release-binaries\* -DestinationPath chronos-${{ matrix.name }}${{ matrix.archive_ext }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: chronos-${{ matrix.name }}
+          path: chronos-${{ matrix.name }}${{ matrix.archive_ext }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
