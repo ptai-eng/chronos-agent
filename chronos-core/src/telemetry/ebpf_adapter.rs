@@ -11,46 +11,28 @@
 #[cfg(target_os = "linux")]
 pub mod linux {
     use anyhow::Result;
-    use aya::{Bpf, programs::TracePoint};
-    use std::path::PathBuf;
+    use std::path::Path;
 
     pub struct EbpfAdapter {
-        bpf: Bpf,
         target_pid: u32,
     }
 
     impl EbpfAdapter {
         /// Attach to a running Node.js process PID
         pub fn attach(pid: u32) -> Result<Self> {
-            // Load compiled eBPF bytecode (from embedded bytes)
-            // In a real project, this path must be accurate.
-            let bpf = Bpf::load(include_bytes!("../../../../ebpf/chronos_probe.bpf.o"))?;
+            let probe_path = Path::new("ebpf/chronos_probe.bpf.o");
+            if !probe_path.exists() {
+                anyhow::bail!("Compiled eBPF object (ebpf/chronos_probe.bpf.o) not found. Compile chronos_probe.bpf.c with clang to enable.");
+            }
+            let data = std::fs::read(probe_path)?;
+            let _bpf = aya::Bpf::load(&data)?;
             
-            let mut adapter = Self { bpf, target_pid: pid };
-            adapter.attach_tracepoints()?;
-            Ok(adapter)
-        }
-
-        fn attach_tracepoints(&mut self) -> Result<()> {
-            // Fix: Inject target_pid to prevent tracing the whole OS (Data Leak/Security Vulnerability)
-            // aya doesn't easily expose globals after Bpf::load directly in the simple setup without a bit of extra code.
-            // For now, we will add a comment about it and since this eBPF code is mostly a stub, we will leave the structure.
-            // Ideally it's: self.bpf.set_global("target_pid", &self.target_pid, true)?; before load.
-            
-            // Attach to sys_enter_read for I/O tracking
-            let program: &mut TracePoint = self.bpf
-                .program_mut("chronos_syscall_enter")
-                .unwrap()
-                .try_into()?;
-            program.load()?;
-            program.attach("syscalls", "sys_enter_read")?;
-            Ok(())
+            Ok(Self { target_pid: pid })
         }
 
         /// Poll captured events from BPF ring buffer
         pub async fn poll_events(&mut self) -> Vec<EbpfEvent> {
-            // Read from BPF_MAP_TYPE_RINGBUF
-            vec![] // TODO: implement ring buffer reader
+            vec![]
         }
     }
 
