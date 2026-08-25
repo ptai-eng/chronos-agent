@@ -9,11 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.98%20%7C%202024%20Edition-orange?logo=rust&logoColor=white" alt="Rust Version"></a>
   <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-79%2F79%20Passing-brightgreen?logo=checkmarx&logoColor=white" alt="Tests"></a>
   <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-2024--11--05-blue?logo=protocol&logoColor=white" alt="MCP Protocol"></a>
   <a href="./integrations/INTEGRATIONS.md"><img src="https://img.shields.io/badge/AI%20Clients-9%20Supported-purple?logo=openai&logoColor=white" alt="AI Clients"></a>
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Release-Pre--compiled%20Binaries-success" alt="Precompiled Binaries"></a>
+  <a href="https://github.com/ptai-eng/chronos-agent/releases"><img src="https://img.shields.io/badge/Release-Pre--compiled%20Binaries-success" alt="Precompiled Binaries"></a>
   <a href="#-security--privacy-notice-nvidia-skillspector-alert"><img src="https://img.shields.io/badge/Security-SkillSpector%20Audited-red" alt="Security Notice"></a>
 </p>
 
@@ -47,7 +48,7 @@ Traditional AI coding models generate code based on **static text probabilities*
 ## 🏛️ Core Architecture: The 4 Pillars
 
 <p align="center">
-  <img src="assets/chronos_architecture.svg" alt="CHRONOS Architecture Diagram" width="100%"/>
+  <img src="assets/chronos_architecture.jpg" alt="CHRONOS Architecture Diagram" width="100%" style="border-radius: 12px;"/>
 </p>
 
 | Pillar | Focus | Technology &amp; Implementation | Location |
@@ -62,7 +63,7 @@ Traditional AI coding models generate code based on **static text probabilities*
 ## 📊 Capability Matrix &amp; Benchmark
 
 <p align="center">
-  <img src="assets/chronos_benchmark_radar.svg" alt="CHRONOS Capability Radar Comparison" width="100%"/>
+  <img src="assets/chronos_benchmark_radar.jpg" alt="CHRONOS Capability Radar Comparison" width="100%" style="border-radius: 12px;"/>
 </p>
 
 ### Feature Comparison
@@ -83,6 +84,10 @@ Traditional AI coding models generate code based on **static text probabilities*
 <p align="center">
   <img src="assets/chronos_radar_dashboard.jpg" alt="CHRONOS Developer HUD Mockup" width="100%" style="border-radius: 12px;"/>
 </p>
+
+> [!TIP]
+> **🚀 Now Available on Visual Studio Marketplace:**  
+> You can install the companion extension directly inside VS Code by searching **"CHRONOS Agent"** in the Extensions tab (`Ctrl+Shift+X`), or visit the official [VS Code Marketplace Listing](https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent).
 
 The companion **CHRONOS VS Code Extension** (`chronos-vscode/`) brings the 4D Knowledge Graph directly into your daily editor:
 
@@ -119,10 +124,11 @@ chronos mcp --client all
 
 ### Option 1: Zero-Build Pre-compiled Binaries (Recommended)
 
-Download the pre-built binaries for your platform directly from [GitHub Releases](https://github.com/):
+Download the pre-built binaries for your platform directly from [GitHub Releases](https://github.com/ptai-eng/chronos-agent/releases/tag/v1.0.0):
 - **Windows (x64):** `chronos-windows-x64.zip` (`chronos.exe` + `chronos-mcp.exe`)
 - **Linux (x64):** `chronos-linux-x64.tar.gz`
-- **macOS (Intel / Apple Silicon):** `chronos-macos-x64.tar.gz` / `chronos-macos-arm64.tar.gz`
+- **macOS (Intel / Apple Silicon):** `chronos-macos-arm64.tar.gz`
+- **VS Code Extension:** `chronos-agent-1.0.0.vsix`
 
 ### Option 2: Build from Source
 
@@ -132,7 +138,7 @@ Download the pre-built binaries for your platform directly from [GitHub Releases
 $env:PATH = "$env:USERPROFILE\.cargo\bin;C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;$env:PATH"
 
 # Clone and compile the workspace:
-git clone https://github.com/your-org/chronos-agent.git
+git clone https://github.com/ptai-eng/chronos-agent.git
 cd chronos-agent
 cargo build --release
 
@@ -209,7 +215,7 @@ TOTAL TEST COVERAGE:             79/79  PASS  (100% Success Rate ✅)
 - [x] **Phase 8:** Comprehensive Integration Verification (79/79 Tests Passing)
 - [x] **Phase v2.1:** Embedded KuzuDB Persistent Graph Storage
 - [x] **Phase v2.2:** GitHub Actions Multi-Platform Release Pipeline (Windows, Linux, macOS)
-- [x] **Phase v2.3:** Interactive VS Code Extension Dashboard
+- [x] **Phase v2.3:** Interactive VS Code Extension Published to Marketplace
 - [x] **Phase v2.4:** eBPF Low-Overhead Kernel Telemetry (Linux/WSL2)
 
 ---
