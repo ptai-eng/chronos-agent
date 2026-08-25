@@ -1,14 +1,35 @@
 {
   "name": "chronos-agent",
   "displayName": "CHRONOS Agent",
-  "description": "4D Knowledge Graph — Real-time blast-radius + mutation score",
-  "version": "0.1.0",
+  "description": "4D Living Code Intelligence Harness — Real-time blast-radius + mutation score",
+  "version": "1.0.0",
+  "publisher": "ptai-eng",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
+    "Programming Languages",
+    "Linters",
     "Other"
   ],
+  "keywords": [
+    "mcp",
+    "ai",
+    "blast-radius",
+    "telemetry",
+    "kuzu",
+    "mutation-testing",
+    "chronos"
+  ],
+  "homepage": "https://github.com/ptai-eng/chronos-agent",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ptai-eng/chronos-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ptai-eng/chronos-agent/issues"
+  },
+  "license": "MIT",
   "activationEvents": [
     "onLanguage:typescript",
     "onLanguage:javascript"
@@ -34,7 +55,7 @@
       "properties": {
         "chronos.mcpBinaryPath": {
           "type": "string",
-          "description": "Path to chronos-mcp.exe binary"
+          "description": "Path to chronos-mcp executable binary"
         }
       }
     }
@@ -44,14 +65,11 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@types/node": "^26.2.0",
-    "@types/vscode": "^1.134.0",
-    "typescript": "^7.0.2",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0",
     "vscode-languageclient": "^10.1.0"
   },
   "dependencies": {
