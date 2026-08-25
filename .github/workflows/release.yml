@@ -5,37 +5,33 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: windows-x64
-            extension: .exe
-            archive_ext: .zip
+            archive_name: chronos-windows-x64.zip
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             name: linux-x64
-            extension: ''
-            archive_ext: .tar.gz
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            name: macos-x64
-            extension: ''
-            archive_ext: .tar.gz
+            archive_name: chronos-linux-x64.tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
             name: macos-arm64
-            extension: ''
-            archive_ext: .tar.gz
+            archive_name: chronos-macos-arm64.tar.gz
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -54,7 +50,7 @@ jobs:
           mkdir -p release-binaries
           cp target/${{ matrix.target }}/release/chronos-mcp release-binaries/
           cp target/${{ matrix.target }}/release/chronos release-binaries/
-          tar -czvf chronos-${{ matrix.name }}${{ matrix.archive_ext }} -C release-binaries .
+          tar -czvf ${{ matrix.archive_name }} -C release-binaries .
 
       - name: Prepare Artifacts (Windows)
         if: matrix.os == 'windows-latest'
@@ -62,13 +58,13 @@ jobs:
           mkdir release-binaries
           copy target\${{ matrix.target }}\release\chronos-mcp.exe release-binaries\
           copy target\${{ matrix.target }}\release\chronos.exe release-binaries\
-          Compress-Archive -Path release-binaries\* -DestinationPath chronos-${{ matrix.name }}${{ matrix.archive_ext }}
+          Compress-Archive -Path release-binaries\* -DestinationPath ${{ matrix.archive_name }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: chronos-${{ matrix.name }}
-          path: chronos-${{ matrix.name }}${{ matrix.archive_ext }}
+          name: ${{ matrix.name }}
+          path: ${{ matrix.archive_name }}
 
   release:
     name: Create Release
@@ -76,16 +72,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         
       - name: Download all workflow run artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
