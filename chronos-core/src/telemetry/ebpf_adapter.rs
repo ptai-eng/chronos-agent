@@ -25,7 +25,7 @@ pub mod linux {
                 anyhow::bail!("Compiled eBPF object (ebpf/chronos_probe.bpf.o) not found. Compile chronos_probe.bpf.c with clang to enable.");
             }
             let data = std::fs::read(probe_path)?;
-            let _bpf = aya::Bpf::load(&data)?;
+            let _bpf = aya::Ebpf::load(&data)?;
             
             Ok(Self { target_pid: pid })
         }

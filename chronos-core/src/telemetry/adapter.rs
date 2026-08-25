@@ -193,7 +193,7 @@ pub enum RuntimeAdapter {
 }
 
 impl RuntimeAdapter {
-    pub async fn best_available(_pid: u32) -> Self {
+    pub async fn best_available(pid: u32) -> Self {
         #[cfg(target_os = "linux")]
         {
             if let Ok(ebpf) = EbpfAdapter::attach(pid) {
