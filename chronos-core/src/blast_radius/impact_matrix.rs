@@ -250,7 +250,10 @@ impl<'g> ImpactAnalyzer<'g> {
         let mut all_nodes: Vec<AffectedNode> = reports.into_iter()
             .flat_map(|r| r.affected_nodes)
             .collect();
-        all_nodes.sort_by(|a, b| b.impact_score.partial_cmp(&a.impact_score).unwrap());
+        all_nodes.sort_by(|a, b| {
+            b.impact_score.partial_cmp(&a.impact_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         BlastRadiusReport {
             changed_nodes: changed_names,

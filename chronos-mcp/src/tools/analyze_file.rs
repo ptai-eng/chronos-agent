@@ -26,7 +26,19 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
     let abs_path = {
         let st = state.read().await;
         let p = PathBuf::from(&file_path);
-        if p.is_absolute() { p } else { st.workspace_root.join(&p) }
+        let joined = if p.is_absolute() { p } else { st.workspace_root.join(&p) };
+        // Security: canonicalize and ensure path stays within workspace
+        match joined.canonicalize() {
+            Ok(canonical) => {
+                if !canonical.starts_with(&st.workspace_root) {
+                    return CallToolResult::error(
+                        "Security: file path is outside the workspace root"
+                    );
+                }
+                canonical
+            }
+            Err(_) => joined, // file not yet created — will fail at exists() check below
+        }
     };
 
     if !abs_path.exists() {
@@ -65,23 +77,20 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
         inserted += 1;
     }
 
-    // Insert call reference edges (A calls B)
-    for call_ref in &parsed.call_refs {
-        // Find matching node IDs by name — best effort
-        use chronos_core::graph::schema::NodeKind;
-        let caller_id = st.graph
-            .nodes_by_kind(&NodeKind::Function)
-            .into_iter()
-            .chain(st.graph.nodes_by_kind(&NodeKind::Class).into_iter())
-            .find(|n| n.name == call_ref.caller_name)
-            .map(|n| n.id.clone());
+    // Performance fix: pre-build name→id lookup map BEFORE the loop (O(N) instead of O(N×M))
+    use chronos_core::graph::schema::NodeKind;
+    use std::collections::HashMap;
+    let name_to_id: HashMap<String, chronos_core::graph::schema::NodeId> = st.graph
+        .nodes_by_kind(&NodeKind::Function)
+        .into_iter()
+        .chain(st.graph.nodes_by_kind(&NodeKind::Class).into_iter())
+        .map(|n| (n.name.clone(), n.id.clone()))
+        .collect();
 
-        let callee_id = st.graph
-            .nodes_by_kind(&NodeKind::Function)
-            .into_iter()
-            .chain(st.graph.nodes_by_kind(&NodeKind::Class).into_iter())
-            .find(|n| n.name == call_ref.callee_name)
-            .map(|n| n.id.clone());
+    // Insert call reference edges (A calls B) — now O(N) with HashMap lookup
+    for call_ref in &parsed.call_refs {
+        let caller_id = name_to_id.get(&call_ref.caller_name).cloned();
+        let callee_id = name_to_id.get(&call_ref.callee_name).cloned();
 
         if let (Some(caller), Some(callee)) = (caller_id, callee_id) {
             if st.graph.add_edge(&caller, &callee, ChronosEdge::new(EdgeKind::Calls)).is_ok() {
