@@ -131,6 +131,7 @@ impl ModuleDiff {
 
 /// Lightweight signature representation for comparison
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)] // Reserved for Phase 4: full bidirectional signature parsing
 struct FunctionSignature {
     name: String,
     /// Simplified signature string: "name(param1: T1, param2: T2): ReturnT"

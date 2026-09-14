@@ -36,6 +36,7 @@ struct CdpRequest {
 
 /// CDP JSON-RPC response
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Full CDP protocol shape — method/params used for event messages
 struct CdpResponse {
     id: Option<u32>,
     result: Option<Value>,

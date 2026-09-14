@@ -34,6 +34,7 @@ pub struct PersistentGraph {
 /// Escape a string for safe embedding inside Cypher single-quoted literals.
 /// Replaces `\` with `\\` and `'` with `\'` to prevent injection.
 #[inline]
+#[allow(dead_code)] // Security utility — reserved for dynamic Cypher query paths
 fn escape_cypher_string(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\'', "\\'")
 }
