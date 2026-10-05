@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use chronos_mcp::{server::run_server, state::new_shared_state};
+use chronos_mcp::{server::run_server, state::new_shared_state, watcher::FileWatcher};
 use std::path::PathBuf;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -12,13 +12,14 @@ use tracing_subscriber::FmtSubscriber;
     name = "chronos-mcp",
     version = env!("CARGO_PKG_VERSION"),
     about = "CHRONOS-AGENT MCP Server — 4D Knowledge Graph for AI coding agents",
-    long_about = r#"CHRONOS MCP Server exposes 5 tools over the Model Context Protocol:
+    long_about = r#"CHRONOS MCP Server exposes 6 tools over the Model Context Protocol:
 
-  chronos_analyze_file    — Parse TypeScript and insert into 4D graph
+  chronos_analyze_file    — Parse TypeScript/Python/Rust and insert into 4D graph
   chronos_query_hotspots  — Find performance bottlenecks
   chronos_blast_radius    — Analyze change impact
   chronos_mutation_gate   — Run mutation testing gate (80%/90%)
   chronos_contract_status — Drain Pre-Tool Execution Gate alerts
+  chronos_watcher_status  — Check real-time file watcher state
 
 Compatible with: Antigravity, Cursor, Codex CLI, OpenCode, Claude Desktop,
                  Cline, Windsurf, Continue, Zed"#
@@ -31,6 +32,10 @@ struct Args {
     /// Log level (error, warn, info, debug, trace)
     #[arg(short, long, default_value = "warn")]
     log_level: String,
+
+    /// Disable real-time file watcher (useful for CI environments)
+    #[arg(long)]
+    no_watch: bool,
 }
 
 #[tokio::main]
@@ -61,6 +66,23 @@ async fn main() -> Result<()> {
 
     tracing::info!("CHRONOS MCP Server v{}", env!("CARGO_PKG_VERSION"));
     tracing::info!("Workspace: {}", workspace_root.display());
+
+    // Start real-time file watcher (unless disabled)
+    let _watcher = if !args.no_watch {
+        match FileWatcher::start(workspace_root.clone(), state.clone()) {
+            Ok(w) => {
+                tracing::info!("📡 Real-time file watcher active on {}", workspace_root.display());
+                Some(w)
+            }
+            Err(e) => {
+                tracing::warn!("File watcher failed to start: {} (continuing without auto-sync)", e);
+                None
+            }
+        }
+    } else {
+        tracing::info!("File watcher disabled (--no-watch)");
+        None
+    };
 
     // Start the MCP server loop
     run_server(state).await
