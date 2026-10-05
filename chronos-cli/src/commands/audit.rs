@@ -1,8 +1,9 @@
 //! `chronos audit <file>` — Full mutation gate + blast-radius analysis
+//! `chronos audit --diff` — Git diff targeted blast-radius
 
 use anyhow::Result;
 use chronos_core::{
-    ast::ts_parser::TypeScriptParser,
+    ast::dispatcher::LanguageDispatcher,
     blast_radius::{
         impact_matrix::ImpactAnalyzer,
         markdown_glance::generate_glance_markdown,
@@ -27,8 +28,8 @@ pub async fn run(
 
     // ── Step 1: AST Parse ──────────────────────────────────────────
     println!("\n📖 Step 1/3 — Parsing AST...");
-    let mut parser = TypeScriptParser::new()?;
-    let parsed = parser.parse_file(&abs_file)?;
+    let mut dispatcher = LanguageDispatcher::new()?;
+    let parsed = dispatcher.parse_file(&abs_file)?;
 
     let mut graph = ChronosGraph::new();
     for node in parsed.all_nodes() {

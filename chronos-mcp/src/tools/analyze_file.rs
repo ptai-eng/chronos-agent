@@ -6,7 +6,7 @@
 use crate::protocol::CallToolResult;
 use crate::state::SharedState;
 use chronos_core::{
-    ast::ts_parser::TypeScriptParser,
+    ast::dispatcher::LanguageDispatcher,
     graph::schema::{ChronosEdge, EdgeKind},
 };
 use serde_json::Value;
@@ -45,13 +45,20 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
         return CallToolResult::error(format!("File not found: {}", abs_path.display()));
     }
 
-    // TypeScriptParser::new() returns Result<TypeScriptParser>
-    let mut parser = match TypeScriptParser::new() {
-        Ok(p) => p,
+    // Reject unsupported file types early
+    if !LanguageDispatcher::is_supported(&abs_path) {
+        return CallToolResult::error(format!(
+            "Unsupported file type: '{}'. Supported: .ts .tsx .js .py .rs",
+            abs_path.extension().and_then(|e| e.to_str()).unwrap_or("?")
+        ));
+    }
+
+    let mut dispatcher = match LanguageDispatcher::new() {
+        Ok(d) => d,
         Err(e) => return CallToolResult::error(format!("Parser init: {}", e)),
     };
 
-    let parsed = match parser.parse_file(&abs_path) {
+    let parsed = match dispatcher.parse_file(&abs_path) {
         Ok(m) => m,
         Err(e) => return CallToolResult::error(format!("Parse failed: {}", e)),
     };
