@@ -28,6 +28,10 @@ petgraph = { version = "0.6", features = ["serde-1"] }
 tree-sitter = "0.22"
 tree-sitter-typescript = "0.21"
 tree-sitter-python = "0.21"
+tree-sitter-rust = "0.21"
+
+# Temp directory management (parallel mutation sandboxes)
+tempfile = "3"
 
 # Error handling
 anyhow = "1"

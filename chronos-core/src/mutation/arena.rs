@@ -173,8 +173,8 @@ impl<'g> MutationArena<'g> {
             test_file_refs.len()
         );
 
-        // Step 3: Run mutants against tests
-        crate::mutation::runner::run_mutants_sequential(
+        // Step 3: Run mutants in parallel (sandboxed tempdir isolation)
+        crate::mutation::runner::run_mutants_parallel(
             &mut mutants,
             source_file,
             &test_file_refs,

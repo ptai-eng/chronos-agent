@@ -13,6 +13,7 @@
 pub mod arena;
 pub mod operators;
 pub mod runner;
+pub mod sandbox;
 pub mod selector;
 pub mod watchdog;
 
