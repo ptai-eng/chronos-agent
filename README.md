@@ -11,10 +11,11 @@
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.98%20%7C%202024%20Edition-orange?logo=rust&logoColor=white" alt="Rust Version"></a>
-  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-79%2F79%20Passing-brightgreen?logo=checkmarx&logoColor=white" alt="Tests"></a>
+  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-91%2F91%20Passing-brightgreen?logo=checkmarx&logoColor=white" alt="Tests"></a>
   <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-2024--11--05-blue?logo=protocol&logoColor=white" alt="MCP Protocol"></a>
   <a href="./integrations/INTEGRATIONS.md"><img src="https://img.shields.io/badge/AI%20Clients-9%20Supported-purple?logo=openai&logoColor=white" alt="AI Clients"></a>
   <a href="https://github.com/ptai-eng/chronos-agent/releases"><img src="https://img.shields.io/badge/Release-Pre--compiled%20Binaries-success" alt="Precompiled Binaries"></a>
+  <a href="#-whats-new-in-v110"><img src="https://img.shields.io/badge/Languages-TypeScript%20%7C%20Python%20%7C%20Rust-informational" alt="Languages"></a>
   <a href="#-security--privacy-notice-nvidia-skillspector-alert"><img src="https://img.shields.io/badge/Security-SkillSpector%20Audited-red" alt="Security Notice"></a>
 </p>
 
@@ -22,6 +23,7 @@
 
 ## 📑 Table of Contents
 
+- [🆕 What's New in v1.1.0](#-whats-new-in-v110)
 - [⚡ The Paradigm Shift](#-the-paradigm-shift)
 - [🏛️ Core Architecture: The 4 Pillars](#️-core-architecture-the-4-pillars)
 - [📊 Capability Matrix &amp; Benchmark](#-capability-matrix--benchmark)
@@ -32,6 +34,24 @@
 - [🛡️ Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)](#️-security--privacy-notice-nvidia-skillspector-alert)
 - [🧪 Verification &amp; Test Matrix](#-verification--test-matrix)
 - [🗺️ Roadmap &amp; Milestones](#️-roadmap--milestones)
+
+---
+
+## 🆕 What's New in v1.1.0
+
+| Area | Change |
+|---|---|
+| 🌐 **Multi-language parsing** | `chronos audit` and the `chronos_analyze_file` MCP tool now accept `.ts` `.tsx` `.js` `.py` `.rs`. Python support detects Flask/FastAPI routes, decorated classes and `def test_*`. Rust support detects `fn`, `struct`, `use` and `#[cfg(test)]` modules. |
+| 🧬 **Parallel mutation testing** | Each mutant runs in its own sandboxed copy of the project (temp dir, auto-cleaned). Concurrency is capped by `max_concurrency` (default 4), so mutants no longer queue behind one another on a shared source file. |
+| 📡 **Real-time file watcher** | The MCP server re-parses changed source files into the graph automatically (300 ms debounce). Pass `--no-watch` to disable it in CI. |
+| 🔀 **`chronos diff`** | Lists the functions touched by unstaged, staged, a single commit or a PR range. Outputs Markdown or `--json` for CI scripts. |
+| 🛡️ **Security & stability fixes** | Path-traversal guard on `chronos_analyze_file` (paths must resolve inside the workspace). No more panic when an impact score is `NaN`. Call-edge resolution went from O(N×M) to O(N) with a name index. |
+
+> [!NOTE]
+> **Known limitations in v1.1.0**
+> - `chronos diff` reports *which* symbols changed, but risk scoring is not wired in yet (`risk_level` shows `UNKNOWN`), so `--ci` does not block builds yet.
+> - The file watcher inserts nodes but does not yet rebuild call edges, persist to KuzuDB, or remove nodes of deleted files.
+> - Mutation sandboxes skip `node_modules`. Test runners that need local dependencies may have to resolve them from a parent directory.
 
 ---
 
@@ -164,7 +184,9 @@ cargo build --release
 
 ```powershell
 # 1. Full Audit: AST parsing + Blast Radius + Targeted Mutation Gate
+#    Works on .ts .tsx .js .py .rs
 chronos audit src/services/orderService.ts
+chronos audit app/routes/users.py
 
 # 2. 30-Second Executive Glance:
 chronos glance src/services/orderService.ts --symbol processOrdersWithUserInfo
@@ -178,7 +200,16 @@ chronos status --watch src/services/
 
 # 5. Output Ready-to-Use AI Client Configs:
 chronos mcp --client cursor
+
+# 6. Git Diff: list functions touched by your changes (new in v1.1)
+chronos diff                          # unstaged changes
+chronos diff --staged                 # staged changes (pre-commit hook)
+chronos diff --commit a1b2c3d         # a single commit
+chronos diff --range main..feature    # a PR range
+chronos diff --staged --json          # machine-readable output for CI
 ```
+
+The MCP server watches the workspace and keeps the graph in sync as you save files. Disable it with `chronos-mcp --no-watch` in CI.
 
 ---
 
@@ -202,15 +233,19 @@ chronos mcp --client cursor
 
 ```text
 ===============================================================================
-CHRONOS-AGENT VERIFICATION SUITE
+CHRONOS-AGENT VERIFICATION SUITE (v1.1.0)
 ===============================================================================
-chronos-core unit tests:         65/65  PASS  [Graph, AST, Telemetry, Mutation]
-chronos-core KuzuDB tests:        8/8   PASS  [Persistent Graph Storage]
+chronos-core unit tests:         73/73  PASS  [Graph, AST (TS/Py/Rust), Telemetry,
+                                               Mutation, Sandbox]
 chronos-core integration tests:   6/6   PASS  [End-to-End 4 Pillars]
+chronos-core KuzuDB tests:        8/8   PASS  [Persistent Graph Storage]
+chronos-cli unit tests:           4/4   PASS  [Git diff hunk + symbol parsing]
 -------------------------------------------------------------------------------
-TOTAL TEST COVERAGE:             79/79  PASS  (100% Success Rate ✅)
+TOTAL:                           91/91  PASS
 ===============================================================================
 ```
+
+Reproduce with `cargo test --workspace`.
 
 ---
 
@@ -228,6 +263,15 @@ TOTAL TEST COVERAGE:             79/79  PASS  (100% Success Rate ✅)
 - [x] **Phase v2.2:** GitHub Actions Multi-Platform Release Pipeline (Windows, Linux, macOS)
 - [x] **Phase v2.3:** Interactive VS Code Extension Published to Marketplace
 - [x] **Phase v2.4:** eBPF Low-Overhead Kernel Telemetry (Linux/WSL2)
+- [x] **v1.1 — Security hardening:** path-traversal guard, NaN-safe sorting, O(N) call-edge resolution
+- [x] **v1.1 — Parallel Mutation Runner:** sandboxed temp-dir isolation with bounded concurrency
+- [x] **v1.1 — Multi-language AST:** Python (Flask/FastAPI) and Rust parsers behind a single dispatcher
+- [x] **v1.1 — Real-time File Watcher:** debounced auto-sync of changed files into the graph
+- [x] **v1.1 — `chronos diff`:** git-aware changed-symbol detection with Markdown/JSON output
+- [ ] **Next:** risk scoring in `chronos diff` so `--ci` can block high-risk merges
+- [ ] **Next:** watcher rebuilds call edges, persists to KuzuDB, drops deleted files
+- [ ] **Next:** `chronos_watcher_status` MCP tool
+- [ ] **Next:** benchmark parallel mutation on a real Jest project
 
 ---
 
