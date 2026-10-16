@@ -67,6 +67,28 @@ pub struct AffectedNode {
     pub impact_score: f32,
 }
 
+/// Coverage and completeness diagnostics for call-graph and runtime telemetry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoverageReport {
+    pub call_edges_available: bool,
+    pub completeness: String, // "complete" | "partial" | "unknown"
+    pub resolved_calls: usize,
+    pub unresolved_calls: usize,
+    pub telemetry_hydrated: bool,
+}
+
+impl Default for CoverageReport {
+    fn default() -> Self {
+        Self {
+            call_edges_available: false,
+            completeness: "unknown".to_string(),
+            resolved_calls: 0,
+            unresolved_calls: 0,
+            telemetry_hydrated: false,
+        }
+    }
+}
+
 /// The full blast-radius analysis report
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlastRadiusReport {
@@ -76,6 +98,18 @@ pub struct BlastRadiusReport {
     pub overall_risk: RiskZone,
     /// Overall impact score (0.0..=1.0)
     pub impact_score: f32,
+    /// Uncertainty interval (lower_bound, upper_bound) in 0.0..=1.0
+    #[serde(default)]
+    pub confidence_interval: (f32, f32),
+    /// Structural centrality score (PageRank) of the primary changed symbol
+    #[serde(default)]
+    pub pagerank_score: f64,
+    /// Explicit call-graph & telemetry coverage status
+    #[serde(default)]
+    pub coverage: CoverageReport,
+    /// Unresolved edges or missing runtime signals that bound confidence
+    #[serde(default)]
+    pub residual_unknowns: Vec<String>,
     /// All affected nodes, organized by risk zone
     pub affected_nodes: Vec<AffectedNode>,
     /// API routes that will be impacted
@@ -107,6 +141,54 @@ impl<'g> ImpactAnalyzer<'g> {
         Self { graph }
     }
 
+    fn build_coverage_and_unknowns(&self) -> (CoverageReport, Vec<String>, f32) {
+        let status = self.graph.status_report();
+        let call_edges_available = status.total_edges > 0;
+        let telemetry_hydrated = status.hydrated_nodes > 0;
+        let completeness = if !call_edges_available {
+            "unknown".to_string()
+        } else if status.unresolved_calls == 0 && telemetry_hydrated {
+            "complete".to_string()
+        } else {
+            "partial".to_string()
+        };
+
+        let mut unknowns = Vec::new();
+        let mut uncertainty: f32 = 0.05;
+
+        if !call_edges_available {
+            unknowns.push(
+                "0 call edges in graph: callers may be unobserved if dependent files were not analyzed".to_string()
+            );
+            uncertainty += 0.20;
+        }
+        if status.unresolved_calls > 0 {
+            unknowns.push(format!(
+                "{} dynamic/external call site(s) could not be statically resolved",
+                status.unresolved_calls
+            ));
+            uncertainty += 0.10;
+        }
+        if !telemetry_hydrated {
+            unknowns.push(
+                "Runtime telemetry is cold; hot-path weighting uses static complexity + PageRank fallback".to_string()
+            );
+            uncertainty += 0.15;
+        }
+
+        (
+            CoverageReport {
+                call_edges_available,
+                completeness,
+                resolved_calls: status.resolved_calls,
+                unresolved_calls: status.unresolved_calls,
+                telemetry_hydrated,
+            },
+            unknowns,
+            uncertainty,
+        )
+    }
+
     /// Analyze the blast radius of changing a specific node.
     pub fn analyze(&self, changed_node_id: &NodeId, contract_breaking: bool) -> BlastRadiusReport {
         let changed_node = match self.graph.get_node(changed_node_id) {
@@ -117,6 +199,10 @@ impl<'g> ImpactAnalyzer<'g> {
         let mut affected_nodes: Vec<AffectedNode> = vec![];
         let mut affected_routes: Vec<String> = vec![];
         let mut hot_path_affected = false;
+
+        // Compute structural PageRank centrality across the graph
+        let pagerank_map = self.graph.compute_pagerank(20, 0.85);
+        let pagerank_score = pagerank_map.get(changed_node_id).copied().unwrap_or(0.0);
 
         // Zone 1: Direct callers (most immediate impact)
         let direct_callers = self.graph.callers_of(changed_node_id);
@@ -179,8 +265,8 @@ impl<'g> ImpactAnalyzer<'g> {
             }
         }
 
-        // Zone 3: Performance risk from changed node itself
-        let self_impact = compute_node_impact(changed_node, contract_breaking);
+        // Zone 3: Performance risk from changed node itself (incorporating PageRank)
+        let self_impact = compute_node_impact(changed_node, contract_breaking, pagerank_score);
 
         // Overall impact score
         let impact_score = compute_overall_impact(
@@ -191,12 +277,22 @@ impl<'g> ImpactAnalyzer<'g> {
             self_impact,
         );
 
+        let (coverage, residual_unknowns, uncertainty) = self.build_coverage_and_unknowns();
+        let confidence_interval = (
+            (impact_score - uncertainty).max(0.0),
+            (impact_score + uncertainty).min(1.0),
+        );
+
         let overall_risk = RiskZone::from_score(impact_score);
 
         BlastRadiusReport {
             changed_nodes: vec![changed_node.name.clone()],
             overall_risk,
             impact_score,
+            confidence_interval,
+            pagerank_score,
+            coverage,
+            residual_unknowns,
             affected_nodes,
             affected_routes,
             direct_callers_count: direct_count,
@@ -208,11 +304,16 @@ impl<'g> ImpactAnalyzer<'g> {
 
     /// Analyze blast radius of multiple changed nodes (git diff scenario)
     pub fn analyze_diff(&self, changed_ids: &[&NodeId]) -> BlastRadiusReport {
+        let (coverage, residual_unknowns, uncertainty) = self.build_coverage_and_unknowns();
         if changed_ids.is_empty() {
             return BlastRadiusReport {
                 changed_nodes: vec![],
                 overall_risk: RiskZone::Safe,
                 impact_score: 0.0,
+                confidence_interval: (0.0, uncertainty.min(1.0)),
+                pagerank_score: 0.0,
+                coverage,
+                residual_unknowns,
                 affected_nodes: vec![],
                 affected_routes: vec![],
                 direct_callers_count: 0,
@@ -239,12 +340,18 @@ impl<'g> ImpactAnalyzer<'g> {
             .sum::<f32>()
             .min(0.40); // cap bonus at +40 pp so single-file changes aren't punished
         let compound_score = (max_score + compound_bonus).min(1.0);
+        let max_pagerank = reports.iter().map(|r| r.pagerank_score).fold(0.0_f64, f64::max);
         let total_direct: usize = reports.iter().map(|r| r.direct_callers_count).sum();
         let total_transitive: usize = reports.iter().map(|r| r.transitive_callers_count).sum();
         let any_hot_path = reports.iter().any(|r| r.hot_path_affected);
         let any_contract = reports.iter().any(|r| r.contract_breaking);
         let changed_names: Vec<String> = reports.iter()
             .flat_map(|r| r.changed_nodes.iter().cloned())
+            .collect();
+        let all_routes: Vec<String> = reports.iter()
+            .flat_map(|r| r.affected_routes.iter().cloned())
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect();
 
         let mut all_nodes: Vec<AffectedNode> = reports.into_iter()
@@ -259,8 +366,15 @@ impl<'g> ImpactAnalyzer<'g> {
             changed_nodes: changed_names,
             overall_risk: RiskZone::from_score(compound_score),
             impact_score: compound_score,
+            confidence_interval: (
+                (compound_score - uncertainty).max(0.0),
+                (compound_score + uncertainty).min(1.0),
+            ),
+            pagerank_score: max_pagerank,
+            coverage,
+            residual_unknowns,
             affected_nodes: all_nodes,
-            affected_routes: vec![], // Simplified
+            affected_routes: all_routes,
             direct_callers_count: total_direct,
             transitive_callers_count: total_transitive,
             hot_path_affected: any_hot_path,
@@ -269,10 +383,17 @@ impl<'g> ImpactAnalyzer<'g> {
     }
 
     fn empty_report(&self, id: &NodeId, contract_breaking: bool) -> BlastRadiusReport {
+        let (coverage, mut residual_unknowns, uncertainty) = self.build_coverage_and_unknowns();
+        residual_unknowns.push(format!("Target node `{}` not found in graph", id));
+        let score = if contract_breaking { 0.3 } else { 0.0 };
         BlastRadiusReport {
             changed_nodes: vec![id.to_string()],
             overall_risk: if contract_breaking { RiskZone::Medium } else { RiskZone::Safe },
-            impact_score: if contract_breaking { 0.3 } else { 0.0 },
+            impact_score: score,
+            confidence_interval: ((score - uncertainty).max(0.0), (score + uncertainty).min(1.0)),
+            pagerank_score: 0.0,
+            coverage,
+            residual_unknowns,
             affected_nodes: vec![],
             affected_routes: vec![],
             direct_callers_count: 0,
@@ -284,13 +405,15 @@ impl<'g> ImpactAnalyzer<'g> {
 }
 
 /// Compute impact contribution from the changed node itself
-fn compute_node_impact(node: &ChronosNode, contract_breaking: bool) -> f32 {
+fn compute_node_impact(node: &ChronosNode, contract_breaking: bool, pagerank_score: f64) -> f32 {
     let telemetry_hotness = if let Some(t) = &node.telemetry {
         if t.is_bottleneck { 1.0 }
         else if t.is_hot_path { 0.6 }
         else { t.cpu_percent_self / 100.0 }
     } else {
-        node.heuristics.cognitive_load_score / 100.0 * 0.5
+        let cog = (node.heuristics.cognitive_load_score / 100.0).min(1.0) * 0.5;
+        let pr_boost = (pagerank_score as f32 * 1.5).min(0.5);
+        (cog + pr_boost).min(1.0)
     };
 
     let contract_score = if contract_breaking { 1.0 } else { 0.0 };

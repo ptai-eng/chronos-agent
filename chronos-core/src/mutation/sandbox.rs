@@ -78,8 +78,53 @@ impl MutantSandbox {
     }
 }
 
+impl Drop for MutantSandbox {
+    fn drop(&mut self) {
+        // Safely detach any linked dependency directories (symlink/junction) before TempDir removal
+        for dep_dir in &["node_modules", ".venv", "venv"] {
+            let p = self.working_dir.join(dep_dir);
+            if p.exists() || p.symlink_metadata().is_ok() {
+                let _ = std::fs::remove_dir(&p).or_else(|_| std::fs::remove_file(&p));
+            }
+        }
+    }
+}
+
+/// Link a heavy dependency directory (`node_modules`, `.venv`, `venv`) into the sandbox
+/// without copying thousands of files.
+fn link_dependency_dir(src: &Path, dst: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(src, dst)
+            .with_context(|| format!("Failed to symlink {:?} -> {:?}", src, dst))?;
+    }
+    #[cfg(windows)]
+    {
+        if std::os::windows::fs::symlink_dir(src, dst).is_err() {
+            // Fallback to Windows directory junction (`mklink /J`), which requires no admin privileges
+            let status = std::process::Command::new("cmd")
+                .args([
+                    "/C",
+                    "mklink",
+                    "/J",
+                    &dst.to_string_lossy(),
+                    &src.to_string_lossy(),
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .context("Failed to invoke cmd mklink /J")?;
+            if !status.success() {
+                anyhow::bail!("mklink /J failed for {:?} -> {:?}", src, dst);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Recursively copy a directory tree.
-/// Skips `node_modules`, `.git`, and `target/` directories to keep copies fast.
+/// Links `node_modules`, `.venv`, and `venv` via symlink/junction so test runners
+/// resolve dependencies at zero copy cost, and skips `.git`, `target/`, etc.
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
 
@@ -87,14 +132,21 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
         let entry = entry?;
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
+        let src_path = entry.path();
+        let dst_path = dst.join(&name);
 
-        // Skip heavy directories that don't need copying
-        if matches!(name_str.as_ref(), "node_modules" | ".git" | "target" | ".next" | "dist" | "build") {
+        // Link dependency directories instead of skipping or deep-copying
+        if matches!(name_str.as_ref(), "node_modules" | ".venv" | "venv") {
+            if src_path.is_dir() {
+                let _ = link_dependency_dir(&src_path, &dst_path);
+            }
             continue;
         }
 
-        let src_path = entry.path();
-        let dst_path = dst.join(&name);
+        // Skip build/VCS artifacts that don't need copying
+        if matches!(name_str.as_ref(), ".git" | "target" | ".next" | "dist" | "build" | "__pycache__") {
+            continue;
+        }
 
         if src_path.is_dir() {
             copy_dir_all(&src_path, &dst_path)?;
@@ -113,23 +165,36 @@ mod tests {
     #[test]
     fn test_sandbox_creates_and_cleans_up() {
         let working_dir = std::env::temp_dir().join("chronos_sandbox_test_wd");
+        let _ = std::fs::remove_dir_all(&working_dir);
         std::fs::create_dir_all(&working_dir).unwrap();
         let src_file = working_dir.join("test_file.ts");
         std::fs::write(&src_file, "const x = 1;").unwrap();
 
-        let sandbox = MutantSandbox::create(
-            "const x = 0; // mutated",
-            &src_file,
-            &working_dir,
-            &[],
-        ).unwrap();
+        // Also create a mock node_modules with a marker file to verify junction/symlink behavior
+        let nm_dir = working_dir.join("node_modules").join("dummy_pkg");
+        std::fs::create_dir_all(&nm_dir).unwrap();
+        let marker = nm_dir.join("index.js");
+        std::fs::write(&marker, "module.exports = 42;").unwrap();
 
-        // Sandbox file should contain mutated content
-        let content = std::fs::read_to_string(&sandbox.source_file).unwrap();
-        assert_eq!(content, "const x = 0; // mutated");
+        {
+            let sandbox = MutantSandbox::create(
+                "const x = 0; // mutated",
+                &src_file,
+                &working_dir,
+                &[],
+            ).unwrap();
 
-        // Working dir is inside a tempdir
-        assert!(sandbox.working_dir.exists());
+            // Sandbox file should contain mutated content
+            let content = std::fs::read_to_string(&sandbox.source_file).unwrap();
+            assert_eq!(content, "const x = 0; // mutated");
+
+            // Linked node_modules should be accessible inside the sandbox
+            let sandbox_marker = sandbox.working_dir.join("node_modules").join("dummy_pkg").join("index.js");
+            assert!(sandbox_marker.exists(), "node_modules should be linked into sandbox");
+        }
+
+        // Original node_modules marker must still exist after sandbox is dropped!
+        assert!(marker.exists(), "Dropping sandbox must not delete host node_modules contents");
 
         // Cleanup
         std::fs::remove_dir_all(&working_dir).ok();

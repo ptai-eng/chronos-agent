@@ -34,6 +34,11 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let detail = params.as_ref()
+        .and_then(|p| p.get("detail"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("summary");
+
     let st = state.read().await;
 
     if st.graph.status_report().total_nodes == 0 {
@@ -42,8 +47,7 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
         );
     }
 
-    // Try to find the node — try multiple kinds + file hints
-    // NodeKind variants: Function, Class, ApiRoute, TypeDefinition, TestCase
+    // Try to find the node — try multiple kinds + file hints, then search all nodes in graph
     let node_kinds = [
         NodeKind::Function,
         NodeKind::Class,
@@ -51,49 +55,34 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
         NodeKind::TestCase,
     ];
 
-    // Collect all candidate NodeIds
     let mut candidate_id: Option<NodeId> = None;
 
-    'outer: for kind in &node_kinds {
-        // Try with file hint first
-        if let Some(ref file) = file_hint {
+    if let Some(ref file) = file_hint {
+        for kind in &node_kinds {
             let id = NodeId::new(file, &symbol_name, kind);
             if st.graph.get_node(&id).is_some() {
                 candidate_id = Some(id);
-                break 'outer;
+                break;
             }
         }
-
-        // Try without file path (search all nodes by name)
-        let status = st.graph.status_report();
-        debug!("Searching {} nodes for symbol '{}'", status.total_nodes, symbol_name);
     }
 
-    // Fallback: search graph for any node matching the name
+    // Fallback: search all nodes in the graph by exact name or qualified_name
     if candidate_id.is_none() {
-        // Use the hot_path_nodes query to get a broader list and name-match
-        let analyzer_result = {
-            // Search by trying common file path patterns
-            let possible_files = vec![
-                format!("src/{}.ts", symbol_name.to_lowercase()),
-                format!("src/services/{}.ts", symbol_name.to_lowercase()),
-                format!("src/routes/{}.ts", symbol_name.to_lowercase()),
-            ];
-
-            let mut found = None;
-            for file in &possible_files {
-                for kind in &node_kinds {
-                    let id = NodeId::new(file, &symbol_name, kind);
-                    if st.graph.get_node(&id).is_some() {
-                        found = Some(id);
-                        break;
-                    }
-                }
-                if found.is_some() { break; }
-            }
-            found
-        };
-        candidate_id = analyzer_result;
+        debug!("Searching all nodes for symbol '{}'", symbol_name);
+        let all_nodes = st.graph.all_nodes();
+        if let Some(matched) = all_nodes.iter().find(|n| {
+            let file_matches = file_hint.as_ref().map_or(true, |hint| {
+                n.location.file.to_string_lossy().ends_with(hint.as_str())
+            });
+            file_matches && (n.name == symbol_name || n.qualified_name == symbol_name)
+        }) {
+            candidate_id = Some(matched.id.clone());
+        } else if let Some(matched) = all_nodes.iter().find(|n| {
+            n.name == symbol_name || n.qualified_name == symbol_name
+        }) {
+            candidate_id = Some(matched.id.clone());
+        }
     }
 
     let node_id = match candidate_id {
@@ -115,8 +104,8 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
     // Always generate the 30-second Markdown glance
     let mut output = generate_glance_markdown(&report);
 
-    // Generate full HTML dashboard for HIGH/CRITICAL risk
-    if report.needs_visual_dashboard() {
+    // Generate full HTML dashboard only when detail == "complete" (or explicitly requested)
+    if detail == "complete" && report.needs_visual_dashboard() {
         let html = generate_html_dashboard(&report);
 
         // Write HTML to temp file
@@ -135,10 +124,17 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
                 output.push_str(&format!("\n\n⚠️ Could not write HTML dashboard: {}", e));
             }
         }
+    } else if detail == "summary" && report.needs_visual_dashboard() {
+        output.push_str(
+            "\n\n> 💡 Pass `detail: \"complete\"` to generate the standalone HTML blast-radius dashboard.",
+        );
     }
 
-    // Append inline status line
-    output.push_str(&format!("\n\n---\n_{}_", generate_inline_status(&report)));
+    // Append provenance & inline status line
+    output.push_str(&format!(
+        "\n\n---\n_Provenance: `_meta.provenance.untrusted_content = true` | {}_",
+        generate_inline_status(&report)
+    ));
 
     CallToolResult::text(output)
 }

@@ -331,7 +331,7 @@ fn html_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blast_radius::impact_matrix::{AffectedNode, BlastRadiusReport, RiskZone};
+    use crate::blast_radius::impact_matrix::{AffectedNode, BlastRadiusReport, CoverageReport, RiskZone};
 
     #[test]
     fn test_html_generation_valid() {
@@ -339,6 +339,10 @@ mod tests {
             changed_nodes: vec!["getUser".to_string()],
             overall_risk: RiskZone::Critical,
             impact_score: 0.85,
+            confidence_interval: (0.70, 1.0),
+            pagerank_score: 0.35,
+            coverage: CoverageReport::default(),
+            residual_unknowns: vec![],
             affected_nodes: vec![
                 AffectedNode {
                     node_name: "handleRequest".to_string(),

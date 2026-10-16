@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use chronos_core::{
-    ast::ts_parser::TypeScriptParser,
+    ast::dispatcher::LanguageDispatcher,
     graph::{query::GraphQueryEngine, schema::ChronosGraph},
 };
 use std::path::PathBuf;
@@ -14,24 +14,21 @@ pub async fn run(
     symbol: Option<String>,
 ) -> Result<()> {
     if files.is_empty() {
-        eprintln!("❌ Provide at least one TypeScript file to analyze.");
+        eprintln!("❌ Provide at least one source file (.ts/.js/.py/.rs) to analyze.");
         eprintln!("   Example: chronos graph src/services/orderService.ts --query hotspots");
         std::process::exit(1);
     }
 
     // Build graph from all provided files
-    let mut parser = TypeScriptParser::new()?;
+    let mut dispatcher = LanguageDispatcher::new()?;
     let mut graph = ChronosGraph::new();
 
     for file in &files {
         let abs_file = if file.is_absolute() { file.clone() } else { workspace.join(file) };
-        match parser.parse_file(&abs_file) {
+        match dispatcher.parse_file(&abs_file) {
             Ok(parsed) => {
-                let count = parsed.all_nodes().len();
-                for node in parsed.all_nodes() {
-                    graph.add_node(node.clone());
-                }
-                println!("✓ Parsed {} ({} symbols)", abs_file.display(), count);
+                let (nodes_added, edges_added) = graph.ingest_parsed_module(&parsed);
+                println!("✓ Parsed {} ({} symbols, {} edges)", abs_file.display(), nodes_added, edges_added);
             }
             Err(e) => eprintln!("⚠️  Skipping {}: {}", file.display(), e),
         }

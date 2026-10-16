@@ -46,7 +46,7 @@ impl PythonParser {
         }).count();
 
         let mut cursor = root.walk();
-        self.visit_node(root, src_bytes, path, source, &mut module, &mut cursor, None);
+        self.visit_node(root, src_bytes, path, source, &mut module, &mut cursor, None, None);
 
         Ok(module)
     }
@@ -76,12 +76,30 @@ impl PythonParser {
             end_col: tree_node.end_position().column,
         };
 
-        let mut node = ChronosNode::new(id, kind, name, qualified_name, location);
-        node.heuristics = StaticHeuristics {
+        let fn_text = tree_node.utf8_text(src).unwrap_or("");
+        let mut cyc = 1u32;
+        for kw in &["if ", "elif ", "for ", "while ", "except", " and ", " or ", "match "] {
+            cyc += fn_text.matches(kw).count() as u32;
+        }
+        let sloc = fn_text
+            .lines()
+            .filter(|l| {
+                let t = l.trim();
+                !t.is_empty() && !t.starts_with('#')
+            })
+            .count() as u32;
+
+        let mut heuristics = StaticHeuristics {
+            cyclomatic_complexity: cyc,
             param_count,
             fan_out: self.count_calls_in_node(tree_node, src) as u32,
+            sloc,
             ..StaticHeuristics::default()
         };
+        heuristics.compute_cognitive_load();
+
+        let mut node = ChronosNode::new(id, kind, name, qualified_name, location);
+        node.heuristics = heuristics;
         node
     }
 
@@ -89,11 +107,15 @@ impl PythonParser {
         let mut count = 0;
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if child.kind() == "call" { count += 1; }
+            if child.kind() == "call" {
+                count += 1;
+            }
+            count += self.count_calls_in_node(child, _src);
         }
         count
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn visit_node(
         &self,
         node: tree_sitter::Node,
@@ -103,23 +125,26 @@ impl PythonParser {
         module: &mut ParsedModule,
         _cursor: &mut tree_sitter::TreeCursor,
         parent_class: Option<&str>,
+        current_function: Option<&str>,
     ) {
+        let mut next_fn_owned: Option<String> = None;
+
         match node.kind() {
             "function_definition" => {
-                self.extract_function(node, src, path, module, parent_class);
+                next_fn_owned = self.extract_function(node, src, path, module, parent_class);
             }
             "class_definition" => {
                 self.extract_class(node, src, path, module);
             }
             "decorated_definition" => {
-                self.extract_decorated(node, src, path, source, module, parent_class);
+                self.extract_decorated(node, src, path, source, module, parent_class, current_function);
                 return; // children handled inside extract_decorated
             }
             "import_statement" | "import_from_statement" => {
                 self.extract_import(node, src, path, module);
             }
             "call" => {
-                self.extract_call(node, src, module);
+                self.extract_call(node, src, module, current_function);
             }
             _ => {}
         }
@@ -132,11 +157,19 @@ impl PythonParser {
             None
         };
 
+        let active_fn = next_fn_owned.as_deref().or(current_function);
+
         let mut child_cursor = node.walk();
         for child in node.children(&mut child_cursor) {
             self.visit_node(
-                child, src, path, source, module, _cursor,
+                child,
+                src,
+                path,
+                source,
+                module,
+                _cursor,
                 class_name.as_deref().or(parent_class),
+                active_fn,
             );
         }
     }
@@ -148,15 +181,9 @@ impl PythonParser {
         path: &Path,
         module: &mut ParsedModule,
         parent_class: Option<&str>,
-    ) {
-        let name_node = match node.child_by_field_name("name") {
-            Some(n) => n,
-            None => return,
-        };
-        let name = match name_node.utf8_text(src) {
-            Ok(n) => n.to_string(),
-            Err(_) => return,
-        };
+    ) -> Option<String> {
+        let name_node = node.child_by_field_name("name")?;
+        let name = name_node.utf8_text(src).ok()?.to_string();
 
         let full_name = if let Some(class) = parent_class {
             format!("{}.{}", class, name)
@@ -178,6 +205,7 @@ impl PythonParser {
         } else {
             module.functions.push(chronos_node);
         }
+        Some(full_name)
     }
 
     fn extract_class(
@@ -197,6 +225,7 @@ impl PythonParser {
         module.classes.push(chronos_node);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn extract_decorated(
         &self,
         node: tree_sitter::Node,
@@ -205,6 +234,7 @@ impl PythonParser {
         source: &str,
         module: &mut ParsedModule,
         parent_class: Option<&str>,
+        current_function: Option<&str>,
     ) {
         let mut is_route = false;
         let mut route_path = String::new();
@@ -253,28 +283,28 @@ impl PythonParser {
                     .map(|p| p.child_count().saturating_sub(2) as u32)
                     .unwrap_or(0);
 
-                if is_route {
+                let caller_scope = if is_route {
                     let route_name = format!("{} {}", http_method, route_path);
                     let chronos_node = self.make_node(child, src, path, &route_name, NodeKind::ApiRoute, param_count);
                     module.api_routes.push(chronos_node);
+                    route_name
                 } else {
                     let is_test = fn_name.starts_with("test_");
                     let kind = if is_test { NodeKind::TestCase } else { NodeKind::Function };
                     let chronos_node = self.make_node(child, src, path, &full_name, kind, param_count);
                     if is_test { module.test_cases.push(chronos_node); }
                     else { module.functions.push(chronos_node); }
-                }
+                    full_name
+                };
 
                 // Keep call refs / nested defs inside the decorated function body
                 if let Some(body) = child.child_by_field_name("body") {
                     let mut c = body.walk();
-                    self.visit_node(body, src, path, source, module, &mut c, parent_class);
+                    self.visit_node(body, src, path, source, module, &mut c, parent_class, Some(&caller_scope));
                 }
             } else if child.kind() == "class_definition" {
-                // Decorated class (e.g. @dataclass) — visit normally so the class
-                // and its methods are extracted
                 let mut c = child.walk();
-                self.visit_node(child, src, path, source, module, &mut c, parent_class);
+                self.visit_node(child, src, path, source, module, &mut c, parent_class, current_function);
             }
         }
     }
@@ -318,26 +348,38 @@ impl PythonParser {
         node: tree_sitter::Node,
         src: &[u8],
         module: &mut ParsedModule,
+        current_function: Option<&str>,
     ) {
         let func_node = match node.child_by_field_name("function") {
             Some(n) => n,
             None => return,
         };
 
+        if matches!(func_node.kind(), "subscript" | "parenthesized_expression" | "call") {
+            module.unresolved_call_sites += 1;
+            return;
+        }
+
         let callee = match func_node.utf8_text(src) {
-            Ok(t) => t.split('.').last().unwrap_or(t).to_string(),
+            Ok(t) => t.split('.').last().unwrap_or(t).trim().to_string(),
             Err(_) => return,
         };
+
+        if matches!(callee.as_str(), "getattr" | "eval" | "exec") {
+            module.unresolved_call_sites += 1;
+        }
 
         if callee.is_empty() || callee.len() > 64 {
             return;
         }
 
-        module.call_refs.push(CallRef {
-            caller_name: String::new(),
-            callee_name: callee,
-            call_site_line: node.start_position().row + 1,
-        });
+        if let Some(caller) = current_function {
+            module.call_refs.push(CallRef {
+                caller_name: caller.to_string(),
+                callee_name: callee,
+                call_site_line: node.start_position().row + 1,
+            });
+        }
     }
 }
 

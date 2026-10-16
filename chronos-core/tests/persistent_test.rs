@@ -202,3 +202,52 @@ fn kuzu_sync_from_graph_bulk() {
     let loaded = store.load_into_graph(&mut out_graph).unwrap();
     assert_eq!(loaded, 2, "loaded count must match synced count");
 }
+
+#[test]
+fn kuzu_persists_and_restores_edges_across_restart() {
+    use chronos_core::graph::schema::{ChronosEdge, EdgeKind};
+
+    let dir = tempfile::tempdir().unwrap();
+    let caller_node = make_function_node("src/api.ts", "handleOrder");
+    let callee_node = make_function_node("src/service.ts", "saveOrder");
+    let caller_id = caller_node.id.clone();
+    let callee_id = callee_node.id.clone();
+
+    let mut test_node = make_function_node("src/order.test.ts", "test_handleOrder");
+    test_node.id = NodeId("src/order.test.ts::TestCase::test_handleOrder".to_string());
+    test_node.kind = NodeKind::TestCase;
+    let test_id = test_node.id.clone();
+
+    // Session 1: populate nodes + CALLS and TESTS edges, then sync to KuzuDB
+    {
+        let store = PersistentGraph::open(dir.path()).unwrap();
+        let mut graph = ChronosGraph::new();
+        graph.add_node(caller_node);
+        graph.add_node(callee_node);
+        graph.add_node(test_node);
+        graph.add_edge(&caller_id, &callee_id, ChronosEdge::new(EdgeKind::Calls)).unwrap();
+        graph.add_edge(&test_id, &caller_id, ChronosEdge::new(EdgeKind::Tests)).unwrap();
+
+        let synced = store.sync_from_graph(&graph).unwrap();
+        assert_eq!(synced, 3, "3 nodes should be synced (along with 2 edges)");
+    }
+
+    // Session 2: reopen KuzuDB and verify edges are restored
+    {
+        let store = PersistentGraph::open(dir.path()).unwrap();
+        let mut restored = ChronosGraph::new();
+        let loaded_nodes = store.load_into_graph(&mut restored).unwrap();
+        assert_eq!(loaded_nodes, 3, "all 3 nodes must be restored");
+
+        let status = restored.status_report();
+        assert_eq!(status.total_edges, 2, "both CALLS and TESTS edges must survive restart");
+
+        let callers = restored.callers_of(&callee_id);
+        assert_eq!(callers.len(), 1);
+        assert_eq!(callers[0].name, "handleOrder");
+
+        let tests = restored.tests_for(&caller_id);
+        assert_eq!(tests.len(), 1);
+        assert_eq!(tests[0].name, "test_handleOrder");
+    }
+}

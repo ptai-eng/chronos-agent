@@ -1,85 +1,114 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="100%" height="100%" role="img" aria-labelledby="radar-title radar-desc" style="background: #090d16; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-  <title id="radar-title">CHRONOS Capability Comparison Radar</title>
-  <desc id="radar-desc">Radar chart comparing CHRONOS 4D-Agent against Traditional Linters and Standard AI Coding Assistants across 5 dimensions.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 520" width="100%" height="100%" role="img" aria-labelledby="radar-title radar-desc">
+  <title id="radar-title">CHRONOS-AGENT v1.2 — 5-Axis Capability Comparison Radar</title>
+  <desc id="radar-desc">Five-axis radar chart comparing CHRONOS-AGENT v1.2 against Vanilla AI Agents and Static Linters across Call-Graph Topology, Runtime Telemetry, Mutation Gate Rigor, Blast-Radius Uncertainty, and Contract Safety.</desc>
+
+  <!-- Editorial Paper Background -->
+  <rect width="1120" height="520" rx="8" fill="#f5f5f5"/>
+  <rect x="4" y="4" width="1112" height="512" rx="6" fill="none" stroke="rgba(45,49,66,0.14)" stroke-width="1"/>
 
   <!-- Header -->
-  <text x="48" y="44" fill="#f8fafc" font-size="20" font-weight="700" letter-spacing="-0.02em">CAPABILITY COMPARISON : 5-AXIS RADAR</text>
-  <text x="48" y="66" fill="#94a3b8" font-size="12" font-family="monospace">BENCHMARKING 4D LIVING CODE INTELLIGENCE VS STATIC LINTHOOD &amp; STANDARD AI AGENTS</text>
+  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.14em">CAPABILITY BENCHMARK // 5-AXIS EVALUATION</text>
+  <text x="40" y="64" fill="#2d3142" font-size="24" font-weight="600" font-family="Georgia, 'Instrument Serif', serif">CHRONOS-AGENT v1.2 vs. Vanilla Coding Agents &amp; Static Linters</text>
+  <line x1="40" y1="80" x2="1080" y2="80" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
 
-  <!-- ==================== RADAR GRID (Center: 300, 260; R=150) ==================== -->
-  <g fill="none" stroke="#1e293b" stroke-width="1.2">
-    <!-- 20% -->
-    <polygon points="300,230 328,251 318,284 282,284 271,251" stroke-dasharray="2,2"/>
-    <!-- 40% -->
-    <polygon points="300,200 357,241 335,309 265,309 243,241" stroke-dasharray="2,2"/>
-    <!-- 60% -->
-    <polygon points="300,170 386,232 353,333 247,333 214,232" stroke-dasharray="2,2"/>
-    <!-- 80% -->
-    <polygon points="300,140 414,223 371,357 229,357 186,223" stroke-dasharray="2,2"/>
-    <!-- 100% -->
-    <polygon points="300,110 443,214 388,381 212,381 157,214" stroke="#334155" stroke-width="1.5"/>
+  <!-- Radar Center at (380, 296), Radius R = 160 -->
+  <!--Pentagon vertices for r=160:
+      Axis 1 (Top, -90 deg):        (380, 136)
+      Axis 2 (Top-Right, -18 deg):  (532, 247)
+      Axis 3 (Bottom-Right, 54 deg):(474, 425)
+      Axis 4 (Bottom-Left, 126 deg):(286, 425)
+      Axis 5 (Top-Left, 198 deg):   (228, 247)
+  -->
+  <!-- Grid Rings (25%, 50%, 75%, 100%) -->
+  <polygon points="380,136 532,247 474,425 286,425 228,247" fill="#ffffff" stroke="rgba(45,49,66,0.18)" stroke-width="1"/>
+  <polygon points="380,176 494,259 451,393 309,393 266,259" fill="none" stroke="rgba(45,49,66,0.12)" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <polygon points="380,216 456,271 427,361 333,361 304,271" fill="none" stroke="rgba(45,49,66,0.12)" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <polygon points="380,256 418,284 404,328 356,328 342,284" fill="none" stroke="rgba(45,49,66,0.12)" stroke-width="0.8" stroke-dasharray="4,3"/>
 
-    <!-- Radial Spokes -->
-    <line x1="300" y1="260" x2="300" y2="110" stroke="#334155"/>
-    <line x1="300" y1="260" x2="443" y2="214" stroke="#334155"/>
-    <line x1="300" y1="260" x2="388" y2="381" stroke="#334155"/>
-    <line x1="300" y1="260" x2="212" y2="381" stroke="#334155"/>
-    <line x1="300" y1="260" x2="157" y2="214" stroke="#334155"/>
-  </g>
+  <!-- Axis Spokes -->
+  <line x1="380" y1="296" x2="380" y2="136" stroke="rgba(45,49,66,0.16)" stroke-width="1"/>
+  <line x1="380" y1="296" x2="532" y2="247" stroke="rgba(45,49,66,0.16)" stroke-width="1"/>
+  <line x1="380" y1="296" x2="474" y2="425" stroke="rgba(45,49,66,0.16)" stroke-width="1"/>
+  <line x1="380" y1="296" x2="286" y2="425" stroke="rgba(45,49,66,0.16)" stroke-width="1"/>
+  <line x1="380" y1="296" x2="228" y2="247" stroke="rgba(45,49,66,0.16)" stroke-width="1"/>
+
+  <!-- Series 3: Static Linters (ESLint / Clippy) — Muted Slate (#4f5d75) -->
+  <!-- Scores: AST=40%, Runtime=0%(10% min), Mutation=15%, Blast=25%, Contract=30% -->
+  <polygon points="380,232 395,291 394,315 356,328 334,281" fill="rgba(79,93,117,0.10)" stroke="#4f5d75" stroke-width="1.5" stroke-dasharray="5,3"/>
+
+  <!-- Series 2: Vanilla AI Agents (Prompt-Only) — Link Blue (#2e5aa8) -->
+  <!-- Scores: AST=35%, Runtime=15%, Mutation=20%, Blast=30%, Contract=20% -->
+  <polygon points="380,240 403,289 399,322 352,335 350,286" fill="rgba(46,90,168,0.10)" stroke="#2e5aa8" stroke-width="1.6"/>
+
+  <!-- Series 1: CHRONOS-AGENT v1.2 (Focal Coral #eb6c36) -->
+  <!-- Scores: AST=96%, Runtime=90%, Mutation=95%, Blast=94%, Contract=95% -->
+  <polygon points="380,142 517,252 469,419 292,417 236,249" fill="rgba(235,108,54,0.16)" stroke="#eb6c36" stroke-width="2.4"/>
+
+  <!-- Focal Vertex Dots -->
+  <circle cx="380" cy="142" r="4.5" fill="#eb6c36" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="517" cy="252" r="4.5" fill="#eb6c36" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="469" cy="419" r="4.5" fill="#eb6c36" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="292" cy="417" r="4.5" fill="#eb6c36" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="236" cy="249" r="4.5" fill="#eb6c36" stroke="#ffffff" stroke-width="1.5"/>
 
   <!-- Axis Labels -->
-  <g fill="#94a3b8" font-size="11" font-family="monospace" font-weight="600">
-    <text x="300" y="96" text-anchor="middle" fill="#38bdf8">1. AST GRAPH DEPTH</text>
-    <text x="460" y="218" text-anchor="start" fill="#38bdf8">2. RUNTIME TELEMETRY</text>
-    <text x="400" y="402" text-anchor="start" fill="#38bdf8">3. MUTATION ARENA</text>
-    <text x="200" y="402" text-anchor="end" fill="#38bdf8">4. BLAST-RADIUS HEATMAP</text>
-    <text x="140" y="218" text-anchor="end" fill="#38bdf8">5. PRE-TOOL SAFETY GATE</text>
-  </g>
+  <text x="380" y="108" fill="#2d3142" font-size="12" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">1. Multi-Language Call Graph</text>
+  <text x="380" y="124" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">TS / Python / Rust + PageRank (96%)</text>
 
-  <!-- ==================== RADAR DATA SERIES ==================== -->
+  <text x="548" y="244" fill="#2d3142" font-size="12" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="start">2. Runtime Telemetry</text>
+  <text x="548" y="260" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="start">V8 CDP + eBPF Overlay (90%)</text>
 
-  <!-- Series 2: Traditional Linters (ESLint / SonarQube) -> [75%, 0%, 0%, 20%, 15%] -->
-  <!-- V0: 300,149; V1: 300,260; V2: 300,260; V3: 282,284; V4: 279,253 -->
-  <polygon points="300,148 300,260 300,260 282,284 279,253" 
-           fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-width="1.8"/>
+  <text x="488" y="448" fill="#2d3142" font-size="12" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="start">3. Mutation Testing Gate</text>
+  <text x="488" y="464" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="start">Symlink Sandbox • 90% Strict (95%)</text>
 
-  <!-- Series 3: Vanilla AI Assistants (Copilot / Cursor) -> [40%, 10%, 0%, 15%, 30%] -->
-  <polygon points="300,200 314,255 300,260 287,278 257,246" 
-           fill="#a855f7" fill-opacity="0.15" stroke="#a855f7" stroke-width="1.8"/>
+  <text x="272" y="448" fill="#2d3142" font-size="12" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="end">4. Blast-Radius &amp; Uncertainty</text>
+  <text x="272" y="464" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">CoverageReport + CI Bounds (94%)</text>
 
-  <!-- Series 1: CHRONOS-AGENT -> [95%, 90%, 95%, 98%, 92%] -->
-  <polygon points="300,117 428,218 384,375 214,379 168,218" 
-           fill="#0ea5e9" fill-opacity="0.30" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="212" y="244" fill="#2d3142" font-size="12" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="end">5. Pre-Tool Contract Gate</text>
+  <text x="212" y="260" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">30ms Signature Diff + Provenance (95%)</text>
 
-  <!-- Glowing Points on CHRONOS -->
-  <circle cx="300" cy="117" r="4" fill="#38bdf8"/>
-  <circle cx="428" cy="218" r="4" fill="#38bdf8"/>
-  <circle cx="384" cy="375" r="4" fill="#38bdf8"/>
-  <circle cx="214" cy="379" r="4" fill="#38bdf8"/>
-  <circle cx="168" cy="218" r="4" fill="#38bdf8"/>
+  <!-- Right-hand Editorial Scorecard Panel -->
+  <rect x="708" y="108" width="372" height="360" rx="6" fill="#ffffff" stroke="rgba(45,49,66,0.14)" stroke-width="1"/>
+  <text x="732" y="136" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">COMPARATIVE SCORECARD</text>
+  <line x1="732" y1="148" x2="1056" y2="148" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
 
-  <!-- ==================== SIDE COMPARISON PANEL ==================== -->
-  <g transform="translate(560, 100)">
-    <!-- Legend Item 1: CHRONOS -->
-    <rect x="0" y="0" width="350" height="90" rx="8" fill="#131c2e" stroke="#38bdf8" stroke-width="1.5"/>
-    <circle cx="20" cy="24" r="6" fill="#38bdf8"/>
-    <text x="36" y="28" fill="#f8fafc" font-size="14" font-weight="700">CHRONOS 4D-Agent</text>
-    <text x="280" y="28" fill="#38bdf8" font-size="12" font-family="monospace" font-weight="700">SCORE: 94%</text>
-    <text x="20" y="52" fill="#94a3b8" font-size="11">AST Graph &bull; V8 CDP/eBPF &bull; Mutation Gate &bull; 0-Crash Blast-Radius</text>
-    <text x="20" y="70" fill="#64748b" font-size="10" font-family="monospace">Full multidimensional runtime and static protection.</text>
+  <!-- Card Item 1: CHRONOS -->
+  <circle cx="740" cy="176" r="5" fill="#eb6c36"/>
+  <text x="756" y="180" fill="#2d3142" font-size="14" font-weight="600" font-family="-apple-system, 'Geist', sans-serif">CHRONOS-AGENT v1.2</text>
+  <text x="1056" y="180" fill="#eb6c36" font-size="14" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">94.0%</text>
+  <text x="756" y="200" fill="#4f5d75" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Full call-edge resolution, KuzuDB edge persistence,</text>
+  <text x="756" y="216" fill="#4f5d75" font-size="11" font-family="-apple-system, 'Geist', sans-serif">PageRank centrality, and explicit residual unknowns.</text>
 
-    <!-- Legend Item 2: Traditional Linters -->
-    <rect x="0" y="106" width="350" height="74" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.2"/>
-    <circle cx="20" cy="128" r="6" fill="#f59e0b"/>
-    <text x="36" y="132" fill="#f8fafc" font-size="13" font-weight="600">Static Linters (ESLint, Sonar)</text>
-    <text x="280" y="132" fill="#f59e0b" font-size="12" font-family="monospace">SCORE: 22%</text>
-    <text x="20" y="156" fill="#94a3b8" font-size="11">Static syntax only. Blind to runtime memory and mutation faults.</text>
+  <line x1="732" y1="236" x2="1056" y2="236" stroke="rgba(45,49,66,0.08)" stroke-width="1"/>
 
-    <!-- Legend Item 3: Vanilla AI Assistants -->
-    <rect x="0" y="196" width="350" height="74" rx="8" fill="#181528" stroke="#1e293b" stroke-width="1.2"/>
-    <circle cx="20" cy="218" r="6" fill="#a855f7"/>
-    <text x="36" y="222" fill="#f8fafc" font-size="13" font-weight="600">Vanilla AI Agents (Prompt-only)</text>
-    <text x="280" y="222" fill="#a855f7" font-size="12" font-family="monospace">SCORE: 19%</text>
-    <text x="20" y="246" fill="#94a3b8" font-size="11">Text autocomplete. Hallucinates breaking changes without gates.</text>
-  </g>
+  <!-- Card Item 2: Vanilla AI Coding Agents -->
+  <circle cx="740" cy="264" r="5" fill="#2e5aa8"/>
+  <text x="756" y="268" fill="#2d3142" font-size="14" font-weight="600" font-family="-apple-system, 'Geist', sans-serif">Vanilla AI Agents (Prompt-Only)</text>
+  <text x="1056" y="268" fill="#2e5aa8" font-size="14" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">24.0%</text>
+  <text x="756" y="288" fill="#4f5d75" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Limited to current context window; blind to runtime</text>
+  <text x="756" y="304" fill="#4f5d75" font-size="11" font-family="-apple-system, 'Geist', sans-serif">hot-paths, transitive callers, and weak test assertions.</text>
+
+  <line x1="732" y1="324" x2="1056" y2="324" stroke="rgba(45,49,66,0.08)" stroke-width="1"/>
+
+  <!-- Card Item 3: Static Linters -->
+  <circle cx="740" cy="352" r="5" fill="#4f5d75"/>
+  <text x="756" y="356" fill="#2d3142" font-size="14" font-weight="600" font-family="-apple-system, 'Geist', sans-serif">Static Linters (ESLint / SonarQube)</text>
+  <text x="1056" y="356" fill="#4f5d75" font-size="14" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">22.0%</text>
+  <text x="756" y="376" fill="#4f5d75" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Single-file syntax &amp; formatting rules; no cross-file</text>
+  <text x="756" y="392" fill="#4f5d75" font-size="11" font-family="-apple-system, 'Geist', sans-serif">blast-radius propagation or mutation verification.</text>
+
+  <!-- Metrological Note -->
+  <rect x="732" y="412" width="324" height="40" rx="4" fill="#f5f5f5"/>
+  <text x="744" y="428" fill="#2d3142" font-size="9.5" font-weight="600" font-family="'Geist Mono', Consolas, monospace">UNCERTAINTY &amp; COVERAGE CONTRACT</text>
+  <text x="744" y="444" fill="#4f5d75" font-size="9" font-family="'Geist Mono', Consolas, monospace">Never conflates unobserved edges with 0 callers.</text>
+
+  <!-- Bottom Legend Strip -->
+  <line x1="40" y1="484" x2="1080" y2="484" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+  <text x="40" y="504" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.14em">SERIES</text>
+  <line x1="104" y1="500" x2="128" y2="500" stroke="#eb6c36" stroke-width="2.4"/>
+  <text x="136" y="504" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">CHRONOS-AGENT v1.2 (Focal)</text>
+  <line x1="304" y1="500" x2="328" y2="500" stroke="#2e5aa8" stroke-width="1.6"/>
+  <text x="336" y="504" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Vanilla AI Coding Agents</text>
+  <line x1="488" y1="500" x2="512" y2="500" stroke="#4f5d75" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="520" y="504" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Static Linters</text>
 </svg>

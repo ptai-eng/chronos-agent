@@ -45,7 +45,30 @@ pub async fn handle_query_hotspots(state: SharedState, params: Option<Value>) ->
     if filter == "all" || filter == "bottlenecks" {
         let result = engine.find_bottlenecks();
         if result.details.is_empty() {
-            output.push_str("### ⚡ Bottlenecks\n_No telemetry data yet. Start Node.js with `--inspect-brk` and run a profiling session._\n\n");
+            output.push_str("### ⚡ Runtime Bottlenecks\n_No live telemetry data yet. Showing structural PageRank bottlenecks instead:_\n\n");
+            let pagerank = st.graph.compute_pagerank(20, 0.85);
+            let mut ranked: Vec<_> = st.graph.nodes_by_kind(&chronos_core::graph::schema::NodeKind::Function)
+                .into_iter()
+                .map(|n| (n, pagerank.get(&n.id).copied().unwrap_or(0.0)))
+                .collect();
+            ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            if !ranked.is_empty() {
+                output.push_str("| # | Symbol | File | PageRank | Fan-In | Cognitive Load |\n");
+                output.push_str("|:--|:-------|:-----|:--------:|:------:|:--------------:|\n");
+                for (i, (node, pr)) in ranked.into_iter().take(top_n).enumerate() {
+                    output.push_str(&format!(
+                        "| {} | `{}` | {} | {:.3} | {} | {:.0} |\n",
+                        i + 1,
+                        node.name,
+                        short_path(&node.location.file.to_string_lossy()),
+                        pr,
+                        node.heuristics.fan_in,
+                        node.heuristics.cognitive_load_score,
+                    ));
+                }
+                output.push('\n');
+            }
         } else {
             output.push_str("### 🔴 Top Bottlenecks\n\n");
             output.push_str("| # | Symbol | File | p99 (ms) | CPU% | Calls | Risk |\n");
@@ -105,6 +128,10 @@ pub async fn handle_query_hotspots(state: SharedState, params: Option<Value>) ->
     if report.hot_paths == 0 && report.bottlenecks == 0 {
         output.push_str("\n> 💡 **Tip:** Telemetry is empty — run Node.js with `node --inspect-brk` to populate runtime data.\n");
     }
+    output.push_str(&format!(
+        "\n_Provenance: `_meta.provenance.untrusted_content = true` | Edges: {} (resolved: {}, unresolved: {})_\n",
+        report.total_edges, report.resolved_calls, report.unresolved_calls
+    ));
 
     CallToolResult::text(output)
 }

@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use chronos_core::{
-    ast::ts_parser::TypeScriptParser,
+    ast::dispatcher::LanguageDispatcher,
     blast_radius::{
         impact_matrix::ImpactAnalyzer,
         markdown_glance::{generate_glance_markdown, generate_inline_status},
@@ -14,13 +14,11 @@ use std::path::PathBuf;
 pub async fn run(workspace: PathBuf, file: PathBuf, symbol: Option<String>) -> Result<()> {
     let abs_file = if file.is_absolute() { file } else { workspace.join(file) };
 
-    let mut parser = TypeScriptParser::new()?;
-    let parsed = parser.parse_file(&abs_file)?;
+    let mut dispatcher = LanguageDispatcher::new()?;
+    let parsed = dispatcher.parse_file(&abs_file)?;
 
     let mut graph = ChronosGraph::new();
-    for node in parsed.all_nodes() {
-        graph.add_node(node.clone());
-    }
+    graph.ingest_parsed_module(&parsed);
 
     let analyzer = ImpactAnalyzer::new(&graph);
 

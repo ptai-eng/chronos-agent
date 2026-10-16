@@ -97,13 +97,25 @@ impl FileWatcher {
 
                         match dispatcher.parse_file(&path) {
                             Ok(parsed) => {
-                                let all_nodes: Vec<_> =
-                                    parsed.all_nodes().into_iter().cloned().collect();
-                                let mut st = state.write().await;
-                                for node in &all_nodes {
-                                    st.graph.add_node(node.clone());
+                                let broker = {
+                                    let mut st = state.write().await;
+                                    let (nodes_added, edges_added) = st.graph.ingest_parsed_module(&parsed);
+                                    if let Some(ref db) = st.db {
+                                        if let Err(e) = db.sync_from_graph(&st.graph) {
+                                            warn!("Auto-sync KuzuDB failed: {}", e);
+                                        }
+                                    }
+                                    info!(
+                                        "Auto-synced {} ({} symbols, {} edges)",
+                                        path.display(),
+                                        nodes_added,
+                                        edges_added
+                                    );
+                                    st.broker.clone()
+                                };
+                                if let Err(e) = broker.index_file(&path).await {
+                                    warn!("Auto-sync contract broker failed for {:?}: {}", path, e);
                                 }
-                                info!("Auto-synced {} ({} symbols)", path.display(), all_nodes.len());
                             }
                             Err(e) => {
                                 warn!("Auto-sync parse failed for {:?}: {}", path, e);

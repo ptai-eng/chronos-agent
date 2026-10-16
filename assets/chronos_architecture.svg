@@ -1,146 +1,142 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="100%" height="100%" role="img" aria-labelledby="arch-title arch-desc" style="background: #090d16; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-  <title id="arch-title">CHRONOS-AGENT 4D Architecture</title>
-  <desc id="arch-desc">Multi-tier architecture showing inputs feeding into the 4D Knowledge Graph, powering Mutation Arena, Contract Broker, Blast-Radius engine, and MCP Server.</desc>
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" width="100%" height="100%" role="img" aria-labelledby="arch-title arch-desc">
+  <title id="arch-title">CHRONOS-AGENT v1.2 — 4D Living Code Intelligence Architecture</title>
+  <desc id="arch-desc">Four-tier system schematic showing Multi-Language Tree-sitter AST and Runtime Telemetry feeding the 4D Knowledge Graph (Petgraph + KuzuDB), powering the Mutation Arena, Semantic Contract Broker, and Blast-Radius Engine exposed over MCP and CLI.</desc>
   <defs>
-    <!-- Gradients -->
-    <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.2"/>
-    </linearGradient>
-    <linearGradient id="amber-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#d97706" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.2"/>
-    </linearGradient>
-    <linearGradient id="purple-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.2"/>
-    </linearGradient>
-
-    <!-- Markers -->
-    <marker id="arrow-cyan" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <polygon points="0 0, 8 3, 0 6" fill="#38bdf8"/>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="rgba(45,49,66,0.08)"/>
+    </pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
     </marker>
-    <marker id="arrow-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <polygon points="0 0, 8 3, 0 6" fill="#fbbf24"/>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
     </marker>
-    <marker id="arrow-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <polygon points="0 0, 8 3, 0 6" fill="#c084fc"/>
-    </marker>
-    <marker id="arrow-muted" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
     </marker>
   </defs>
 
-  <!-- Background grid decoration -->
-  <g opacity="0.15">
-    <line x1="40" y1="0" x2="40" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
-    <line x1="280" y1="0" x2="280" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
-    <line x1="640" y1="0" x2="640" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
-    <line x1="920" y1="0" x2="920" y2="520" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
-  </g>
+  <!-- Editorial Paper Background -->
+  <rect width="1120" height="560" rx="8" fill="#f5f5f5"/>
+  <rect width="1120" height="560" rx="8" fill="url(#dots)" opacity="0.7"/>
+  <rect x="4" y="4" width="1112" height="552" rx="6" fill="none" stroke="rgba(45,49,66,0.14)" stroke-width="1"/>
 
-  <!-- Header Section -->
-  <text x="48" y="44" fill="#f8fafc" font-size="20" font-weight="700" letter-spacing="-0.02em">CHRONOS-AGENT : SYSTEM ARCHITECTURE</text>
-  <text x="48" y="66" fill="#94a3b8" font-size="12" font-family="monospace">4D KNOWLEDGE GRAPH &bull; RUNTIME TELEMETRY &bull; MULTI-PILLAR SAFETY ENGINE</text>
+  <!-- Header -->
+  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" letter-spacing="0.14em">SYSTEM ARCHITECTURE // CHRONOS-AGENT V1.2</text>
+  <text x="40" y="64" fill="#2d3142" font-size="24" font-weight="600" font-family="Georgia, 'Instrument Serif', serif">4D Living Code Intelligence &amp; Blast-Radius Harness</text>
+  <line x1="40" y1="80" x2="1080" y2="80" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
 
-  <!-- ==================== CONNECTORS (Draw first for proper z-index) ==================== -->
-  <g fill="none" stroke-width="1.5">
-    <!-- Input to 4D Core Graph -->
-    <path d="M 232 144 L 320 144 L 320 220 L 360 220" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
-    <path d="M 232 244 L 360 244" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
-    <path d="M 232 344 L 320 344 L 320 268 L 360 268" stroke="#38bdf8" marker-end="url(#arrow-cyan)"/>
+  <!-- Left Rail Layer Labels -->
+  <text x="40" y="124" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">01 / INGESTION</text>
+  <text x="40" y="140" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Static AST + Live Runtime</text>
 
-    <!-- 4D Graph to Pillars -->
-    <path d="M 576 220 L 620 220 L 620 144 L 664 144" stroke="#fbbf24" marker-end="url(#arrow-amber)"/>
-    <path d="M 576 244 L 664 244" stroke="#fbbf24" marker-end="url(#arrow-amber)"/>
-    <path d="M 576 268 L 620 268 L 620 344 L 664 344" stroke="#fbbf24" marker-end="url(#arrow-amber)"/>
+  <text x="40" y="236" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">02 / 4D CORE</text>
+  <text x="40" y="252" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Topology &amp; Persistence</text>
 
-    <!-- Core to Interface Layer -->
-    <path d="M 468 316 L 468 412" stroke="#c084fc" marker-end="url(#arrow-purple)"/>
-    <path d="M 780 392 L 780 432 L 676 432" stroke="#64748b" stroke-dasharray="4,4" marker-end="url(#arrow-muted)"/>
-  </g>
+  <text x="40" y="356" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">03 / PILLARS</text>
+  <text x="40" y="372" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Verification &amp; Risk Engines</text>
 
-  <!-- ==================== SECTION 1: INGESTION TIER ==================== -->
-  <g>
-    <text x="48" y="104" fill="#38bdf8" font-size="11" font-weight="700" font-family="monospace" letter-spacing="0.1em">01 / DUAL INGESTION</text>
-    
-    <!-- Node 1: AST Parser -->
-    <rect x="48" y="116" width="184" height="56" rx="8" fill="#131c2e" stroke="#1e293b" stroke-width="1.5"/>
-    <rect x="48" y="116" width="4" height="56" rx="2" fill="#38bdf8"/>
-    <text x="64" y="138" fill="#f8fafc" font-size="13" font-weight="600">Tree-sitter AST Parser</text>
-    <text x="64" y="156" fill="#64748b" font-size="10" font-family="monospace">TypeScript &bull; Call Graph &bull; Scope</text>
+  <text x="40" y="468" fill="#2e5aa8" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">04 / SURFACE</text>
+  <text x="40" y="484" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">MCP Protocol &amp; CLI</text>
 
-    <!-- Node 2: CDP V8 Profiler -->
-    <rect x="48" y="216" width="184" height="56" rx="8" fill="#131c2e" stroke="#1e293b" stroke-width="1.5"/>
-    <rect x="48" y="216" width="4" height="56" rx="2" fill="#38bdf8"/>
-    <text x="64" y="238" fill="#f8fafc" font-size="13" font-weight="600">CDP V8 Runtime Profiler</text>
-    <text x="64" y="256" fill="#64748b" font-size="10" font-family="monospace">node --inspect &bull; WebSocket p95</text>
+  <!-- ================= CONNECTORS (DRAWN BEFORE BOXES) ================= -->
+  <!-- Ingestion -> Petgraph -->
+  <path d="M 380 160 L 380 184 Q 380 192 388 192 L 424 192 Q 432 192 432 200 L 432 208" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <path d="M 780 160 L 780 184 Q 780 192 772 192 L 548 192 Q 540 192 540 200 L 540 208" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
 
-    <!-- Node 3: eBPF Kernel Probe -->
-    <rect x="48" y="316" width="184" height="56" rx="8" fill="#131c2e" stroke="#1e293b" stroke-width="1.5"/>
-    <rect x="48" y="316" width="4" height="56" rx="2" fill="#38bdf8"/>
-    <text x="64" y="338" fill="#f8fafc" font-size="13" font-weight="600">eBPF Kernel Probes</text>
-    <text x="64" y="356" fill="#64748b" font-size="10" font-family="monospace">Linux/WSL2 &bull; Low-overhead OS</text>
-  </g>
+  <!-- Petgraph <-> KuzuDB bidirectional sync -->
+  <line x1="600" y1="240" x2="696" y2="240" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+  <line x1="696" y1="256" x2="600" y2="256" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+  <rect x="620" y="218" width="56" height="14" rx="2" fill="#f5f5f5"/>
+  <text x="648" y="228" fill="#eb6c36" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">MERGE</text>
 
-  <!-- ==================== SECTION 2: 4D ENGINE CORE ==================== -->
-  <g>
-    <text x="360" y="104" fill="#a855f7" font-size="11" font-weight="700" font-family="monospace" letter-spacing="0.1em">02 / CORE KNOWLEDGE ENGINE</text>
+  <!-- Petgraph -> 3 Analytical Pillars (Fanned attach points on bottom edge: x=384, x=480, x=576) -->
+  <path d="M 384 280 L 384 296 Q 384 304 376 304 L 328 304 Q 320 304 320 312 L 320 328" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <path d="M 480 280 L 480 304 Q 480 312 488 312 L 604 312 Q 612 312 612 320 L 612 328" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <path d="M 576 280 L 576 296 Q 576 304 584 304 L 908 304 Q 916 304 916 312 L 916 328" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
 
-    <!-- Central 4D Container -->
-    <rect x="360" y="116" width="216" height="200" rx="12" fill="#15132a" stroke="#a855f7" stroke-width="1.5"/>
-    
-    <text x="380" y="148" fill="#f8fafc" font-size="15" font-weight="700">4D Knowledge Graph</text>
-    <text x="380" y="168" fill="#c084fc" font-size="11" font-family="monospace">Static AST &oplus; Live Telemetry</text>
+  <!-- 3 Pillars -> MCP Server & CLI / VS Code -->
+  <path d="M 320 400 L 320 416 Q 320 424 328 424 L 412 424 Q 420 424 420 432 L 420 440" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+  <path d="M 612 400 L 612 416 Q 612 424 604 424 L 492 424 Q 484 424 484 432 L 484 440" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+  <path d="M 916 400 L 916 416 Q 916 424 908 424 L 828 424 Q 820 424 820 432 L 820 440" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
 
-    <line x1="380" y1="184" x2="556" y2="184" stroke="#2e234d" stroke-width="1"/>
+  <!-- ================= ROW 1: INGESTION LAYER ================= -->
+  <!-- Box 1A: Multi-Language AST Parser -->
+  <rect x="220" y="96" width="320" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="232" y="104" width="44" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+  <text x="254" y="114" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">AST</text>
+  <text x="380" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Tree-sitter Multi-Language Dispatcher</text>
+  <text x="380" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">.ts / .tsx / .py / .rs • CallRef + Macro TokenTree</text>
 
-    <!-- In-memory engine -->
-    <rect x="380" y="196" width="176" height="42" rx="6" fill="#201a3d" stroke="#3b2d69" stroke-width="1"/>
-    <text x="392" y="214" fill="#e2e8f0" font-size="11" font-weight="600">Petgraph Memory Arena</text>
-    <text x="392" y="228" fill="#a855f7" font-size="9" font-family="monospace">&lt;15ms Complex Query Engine</text>
+  <!-- Box 1B: Runtime Telemetry Ingestor -->
+  <rect x="620" y="96" width="320" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="632" y="104" width="60" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+  <text x="662" y="114" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">RUNTIME</text>
+  <text x="780" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Live Telemetry &amp; Profiling Overlay</text>
+  <text x="780" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">V8 CDP Inspector + Linux eBPF • p50/p99 CPU%</text>
 
-    <!-- Persistent Storage -->
-    <rect x="380" y="248" width="176" height="42" rx="6" fill="#201a3d" stroke="#3b2d69" stroke-width="1"/>
-    <text x="392" y="266" fill="#e2e8f0" font-size="11" font-weight="600">KuzuDB Embedded Store</text>
-    <text x="392" y="280" fill="#a855f7" font-size="9" font-family="monospace">Disk-persisted Graph Database</text>
-  </g>
+  <!-- ================= ROW 2: 4D CORE GRAPH ================= -->
+  <!-- Box 2A: Focal 4D Knowledge Graph (Coral Accent) -->
+  <rect x="336" y="208" width="264" height="72" rx="6" fill="#fdf1ec" stroke="#eb6c36" stroke-width="1.5"/>
+  <rect x="348" y="216" width="52" height="14" rx="2" fill="#eb6c36"/>
+  <text x="374" y="226" fill="#ffffff" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">4D CORE</text>
+  <text x="468" y="244" fill="#2d3142" font-size="14" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">ChronosGraph (Petgraph)</text>
+  <text x="468" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PageRank Centrality • &lt;15ms Traversal</text>
 
-  <!-- ==================== SECTION 3: ANALYTIC PILLARS ==================== -->
-  <g>
-    <text x="664" y="104" fill="#fbbf24" font-size="11" font-weight="700" font-family="monospace" letter-spacing="0.1em">03 / SAFETY &amp; QUALITY PILLARS</text>
+  <!-- Box 2B: KuzuDB Persistent Graph -->
+  <rect x="696" y="208" width="264" height="72" rx="6" fill="#ededef" stroke="#4f5d75" stroke-width="1"/>
+  <rect x="708" y="216" width="48" height="14" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8"/>
+  <text x="732" y="226" fill="#4f5d75" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">STORE</text>
+  <text x="828" y="244" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Embedded KuzuDB Engine</text>
+  <text x="828" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Nodes + CALLS / TESTS / IMPORTS</text>
 
-    <!-- Pillar 2: Mutation Arena -->
-    <rect x="664" y="116" width="232" height="56" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.5"/>
-    <rect x="664" y="116" width="4" height="56" rx="2" fill="#fbbf24"/>
-    <text x="680" y="138" fill="#f8fafc" font-size="13" font-weight="600">Targeted Mutation Arena</text>
-    <text x="680" y="156" fill="#64748b" font-size="10" font-family="monospace">80%/90% Kill Gate &bull; Fault Injection</text>
+  <!-- ================= ROW 3: ANALYTICAL PILLARS ================= -->
+  <!-- Box 3A: Mutation Arena -->
+  <rect x="200" y="328" width="256" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="212" y="336" width="56" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+  <text x="240" y="346" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PILLAR 2</text>
+  <text x="328" y="364" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Mutation Testing Arena</text>
+  <text x="328" y="384" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Zero-Copy Symlink Sandbox • 80/90% Gate</text>
 
-    <!-- Pillar 3: Semantic Contract Broker -->
-    <rect x="664" y="216" width="232" height="56" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.5"/>
-    <rect x="664" y="216" width="4" height="56" rx="2" fill="#fbbf24"/>
-    <text x="680" y="238" fill="#f8fafc" font-size="13" font-weight="600">Semantic Contract Broker</text>
-    <text x="680" y="256" fill="#64748b" font-size="10" font-family="monospace">Pre-Tool Gate &bull; 30ms Watcher</text>
+  <!-- Box 3B: Semantic Contract Broker -->
+  <rect x="484" y="328" width="256" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="496" y="336" width="56" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+  <text x="524" y="346" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PILLAR 3</text>
+  <text x="612" y="364" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Semantic Contract Broker</text>
+  <text x="612" y="384" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">30ms Watcher • Pre-Tool Execution Gate</text>
 
-    <!-- Pillar 4: Blast-Radius Heatmap -->
-    <rect x="664" y="316" width="232" height="56" rx="8" fill="#1e1b18" stroke="#1e293b" stroke-width="1.5"/>
-    <rect x="664" y="316" width="4" height="56" rx="2" fill="#fbbf24"/>
-    <text x="680" y="338" fill="#f8fafc" font-size="13" font-weight="600">Blast-Radius Heatmap</text>
-    <text x="680" y="356" fill="#64748b" font-size="10" font-family="monospace">3-Tier Risk Zones &bull; 30s Markdown</text>
-  </g>
+  <!-- Box 3C: Blast-Radius Engine (Focal #2) -->
+  <rect x="768" y="328" width="296" height="72" rx="6" fill="#fdf1ec" stroke="#eb6c36" stroke-width="1.4"/>
+  <rect x="780" y="336" width="56" height="14" rx="2" fill="#eb6c36"/>
+  <text x="808" y="346" fill="#ffffff" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PILLAR 4</text>
+  <text x="916" y="364" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Blast-Radius &amp; Uncertainty Matrix</text>
+  <text x="916" y="384" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CoverageReport • CI Bounds • Residual Unknowns</text>
 
-  <!-- ==================== SECTION 4: UNIFIED INTERFACE ==================== -->
-  <g>
-    <rect x="280" y="412" width="396" height="72" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
-    
-    <text x="300" y="438" fill="#38bdf8" font-size="14" font-weight="700">Universal MCP Server (JSON-RPC 2.0)</text>
-    <text x="300" y="456" fill="#94a3b8" font-size="11">5 Core Tools &bull; Zero-Latency Stdio Communication</text>
-    <text x="300" y="472" fill="#64748b" font-size="10" font-family="monospace">Antigravity | Cursor | Claude | Codex | Cline | Windsurf | Zed</text>
+  <!-- ================= ROW 4: UNIFIED INTERFACE LAYER ================= -->
+  <!-- Box 4A: MCP Server -->
+  <rect x="260" y="440" width="380" height="56" rx="6" fill="#ffffff" stroke="#2e5aa8" stroke-width="1.2"/>
+  <rect x="272" y="448" width="56" height="14" rx="2" fill="rgba(46,90,168,0.1)" stroke="#2e5aa8" stroke-width="0.8"/>
+  <text x="300" y="458" fill="#2e5aa8" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">JSON-RPC</text>
+  <text x="450" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos-mcp Server (5 Tools • 9 AI Clients)</text>
+  <text x="450" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">detail: summary|complete • _meta.provenance.untrusted_content</text>
 
-    <rect x="696" y="412" width="200" height="72" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
-    <text x="712" y="438" fill="#fbbf24" font-size="14" font-weight="700">VS Code Extension</text>
-    <text x="712" y="456" fill="#94a3b8" font-size="11">Interactive IDE Radar</text>
-    <text x="712" y="472" fill="#64748b" font-size="10" font-family="monospace">On-save Static &amp; Telemetry</text>
-  </g>
+  <!-- Box 4B: CLI & VS Code Extension -->
+  <rect x="680" y="440" width="340" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="692" y="448" width="44" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+  <text x="714" y="458" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CLI/UI</text>
+  <text x="850" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos CLI &amp; VS Code HUD Extension</text>
+  <text x="850" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">audit • diff --ci • glance • graph • status</text>
+
+  <!-- Bottom Legend Strip -->
+  <line x1="40" y1="516" x2="1080" y2="516" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+  <text x="40" y="536" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.14em">LEGEND</text>
+  <rect x="112" y="528" width="12" height="8" rx="2" fill="#fdf1ec" stroke="#eb6c36" stroke-width="1.2"/>
+  <text x="132" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Focal 4D Engine (≤2)</text>
+  <rect x="268" y="528" width="12" height="8" rx="2" fill="#ededef" stroke="#4f5d75" stroke-width="1"/>
+  <text x="288" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Persistent Store (KuzuDB)</text>
+  <line x1="440" y1="532" x2="464" y2="532" stroke="#eb6c36" stroke-width="1.4"/>
+  <text x="472" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Primary Telemetry / Risk Flow</text>
+  <line x1="652" y1="532" x2="676" y2="532" stroke="#2e5aa8" stroke-width="1.4"/>
+  <text x="684" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">MCP / Developer Interface</text>
+  <text x="1080" y="536" fill="#7a8399" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">94/94 TESTS PASSING • RUST WORKSPACE</text>
 </svg>

@@ -255,6 +255,10 @@ pub struct ChronosGraph {
     pub last_parsed: Option<DateTime<Utc>>,
     /// Timestamp when last hydrated with telemetry
     pub last_hydrated: Option<DateTime<Utc>>,
+    /// Number of call references successfully resolved to graph edges
+    pub resolved_call_sites: usize,
+    /// Number of dynamic or external call sites that could not be statically resolved
+    pub unresolved_call_sites: usize,
 }
 
 impl ChronosGraph {
@@ -264,6 +268,8 @@ impl ChronosGraph {
             node_index: HashMap::new(),
             last_parsed: None,
             last_hydrated: None,
+            resolved_call_sites: 0,
+            unresolved_call_sites: 0,
         }
     }
 
@@ -297,6 +303,170 @@ impl ChronosGraph {
             self.graph.add_edge(from_idx, to_idx, edge);
         }
         Ok(())
+    }
+
+    /// Return all directed edges in the graph as `(source_id, target_id, edge)` triples.
+    pub fn all_edges(&self) -> Vec<(NodeId, NodeId, ChronosEdge)> {
+        self.graph
+            .edge_references()
+            .map(|e| {
+                let src = self.graph[e.source()].id.clone();
+                let dst = self.graph[e.target()].id.clone();
+                (src, dst, e.weight().clone())
+            })
+            .collect()
+    }
+
+    /// Ingest all symbols and call references from a `ParsedModule` into the graph.
+    ///
+    /// Automatically links `Calls` and `Tests` edges, updates `fan_in`/`fan_out` heuristics,
+    /// and tracks resolved vs. unresolved call sites for coverage reporting.
+    /// Returns `(nodes_inserted, edges_added)`.
+    pub fn ingest_parsed_module(
+        &mut self,
+        parsed: &crate::ast::ts_parser::ParsedModule,
+    ) -> (usize, usize) {
+        let mut inserted = 0usize;
+        for node in parsed.all_nodes() {
+            self.add_node(node.clone());
+            inserted += 1;
+        }
+
+        // Build symbol name -> NodeId index across all callable/targetable nodes
+        let mut name_to_id: HashMap<String, NodeId> = HashMap::new();
+        let mut test_ids: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
+
+        for node in self.graph.node_weights() {
+            if matches!(
+                node.kind,
+                NodeKind::Function | NodeKind::Class | NodeKind::TestCase | NodeKind::ApiRoute
+            ) {
+                name_to_id.insert(node.name.clone(), node.id.clone());
+                if !node.qualified_name.is_empty() {
+                    name_to_id.insert(node.qualified_name.clone(), node.id.clone());
+                }
+                if let Some(short) = node.name.rsplit(|c| c == '.' || c == ':').next() {
+                    if !short.is_empty() {
+                        name_to_id.entry(short.to_string()).or_insert_with(|| node.id.clone());
+                    }
+                }
+                if node.kind == NodeKind::TestCase {
+                    test_ids.insert(node.id.clone());
+                }
+            }
+        }
+
+        let mut edges_added = 0usize;
+        self.unresolved_call_sites += parsed.unresolved_call_sites;
+
+        for call_ref in &parsed.call_refs {
+            let caller_id = name_to_id.get(&call_ref.caller_name).cloned();
+            let callee_id = name_to_id.get(&call_ref.callee_name).cloned();
+
+            match (caller_id, callee_id) {
+                (Some(caller), Some(callee)) if caller != callee => {
+                    let call_edge = ChronosEdge {
+                        kind: EdgeKind::Calls,
+                        call_site_line: Some(call_ref.call_site_line),
+                        coverage_traced: test_ids.contains(&caller),
+                    };
+                    if self.add_edge(&caller, &callee, call_edge).is_ok() {
+                        edges_added += 1;
+                        self.resolved_call_sites += 1;
+                    }
+                    if test_ids.contains(&caller) {
+                        let _ = self.add_edge(
+                            &caller,
+                            &callee,
+                            ChronosEdge {
+                                kind: EdgeKind::Tests,
+                                call_site_line: Some(call_ref.call_site_line),
+                                coverage_traced: true,
+                            },
+                        );
+                    }
+                }
+                (Some(_), None) => {
+                    if !is_common_builtin(&call_ref.callee_name) {
+                        self.unresolved_call_sites += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Refresh fan_in / fan_out on nodes
+        let all_ids: Vec<NodeId> = self.node_index.keys().cloned().collect();
+        for id in all_ids {
+            let fin = self.callers_of(&id).len() as u32;
+            let fout = self.callees_of(&id).len() as u32;
+            if let Some(node) = self.get_node_mut(&id) {
+                node.heuristics.fan_in = fin;
+                node.heuristics.fan_out = node.heuristics.fan_out.max(fout);
+                node.heuristics.compute_cognitive_load();
+            }
+        }
+
+        self.last_parsed = Some(Utc::now());
+        (inserted, edges_added)
+    }
+
+    /// Compute PageRank centrality across all CALLS edges in the graph.
+    ///
+    /// Inspired by NetworkX (`nx.pagerank`): identifies structural hub/bottleneck functions
+    /// that transitive callers depend on heavily, even before runtime telemetry is available.
+    pub fn compute_pagerank(&self, iterations: usize, damping: f64) -> HashMap<NodeId, f64> {
+        let n = self.graph.node_count();
+        if n == 0 {
+            return HashMap::new();
+        }
+        let init_val = 1.0 / (n as f64);
+        let mut ranks: HashMap<NodeIndex, f64> = self
+            .graph
+            .node_indices()
+            .map(|idx| (idx, init_val))
+            .collect();
+
+        let base_rank = (1.0 - damping) / (n as f64);
+
+        for _ in 0..iterations {
+            let mut next_ranks: HashMap<NodeIndex, f64> = self
+                .graph
+                .node_indices()
+                .map(|idx| (idx, base_rank))
+                .collect();
+
+            let mut dangling_sum = 0.0;
+            for idx in self.graph.node_indices() {
+                let out_targets: Vec<NodeIndex> = self
+                    .graph
+                    .edges_directed(idx, petgraph::Direction::Outgoing)
+                    .filter(|e| matches!(e.weight().kind, EdgeKind::Calls))
+                    .map(|e| e.target())
+                    .collect();
+
+                let r = *ranks.get(&idx).unwrap_or(&0.0);
+                if out_targets.is_empty() {
+                    dangling_sum += r;
+                } else {
+                    let share = damping * r / (out_targets.len() as f64);
+                    for t in out_targets {
+                        *next_ranks.entry(t).or_insert(base_rank) += share;
+                    }
+                }
+            }
+
+            let dangling_share = damping * dangling_sum / (n as f64);
+            for val in next_ranks.values_mut() {
+                *val += dangling_share;
+            }
+            ranks = next_ranks;
+        }
+
+        ranks
+            .into_iter()
+            .map(|(idx, score)| (self.graph[idx].id.clone(), score))
+            .collect()
     }
 
     /// Look up a node by its stable NodeId.
@@ -404,6 +574,11 @@ impl ChronosGraph {
         covering_tests
     }
 
+    /// Alias for `find_covering_tests` returning all test cases covering `target`.
+    pub fn tests_for(&self, target: &NodeId) -> Vec<&ChronosNode> {
+        self.find_covering_tests(target)
+    }
+
     /// Total node count in the graph.
     pub fn node_count(&self) -> usize {
         self.graph.node_count()
@@ -412,6 +587,11 @@ impl ChronosGraph {
     /// Total edge count in the graph.
     pub fn edge_count(&self) -> usize {
         self.graph.edge_count()
+    }
+
+    /// Return references to all nodes in the graph.
+    pub fn all_nodes(&self) -> Vec<&ChronosNode> {
+        self.graph.node_weights().collect()
     }
 
     /// Whether the graph has any telemetry data at all.
@@ -443,6 +623,9 @@ impl ChronosGraph {
         
         GraphStatusReport {
             total_nodes,
+            total_edges: self.edge_count(),
+            resolved_calls: self.resolved_call_sites,
+            unresolved_calls: self.unresolved_call_sites,
             hydrated_nodes,
             hot_paths,
             bottlenecks,
@@ -452,6 +635,55 @@ impl ChronosGraph {
             last_hydrated: self.last_hydrated,
         }
     }
+}
+
+fn is_common_builtin(name: &str) -> bool {
+    matches!(
+        name,
+        "log"
+            | "info"
+            | "warn"
+            | "error"
+            | "debug"
+            | "print"
+            | "println"
+            | "format"
+            | "len"
+            | "push"
+            | "pop"
+            | "map"
+            | "filter"
+            | "collect"
+            | "iter"
+            | "into_iter"
+            | "unwrap"
+            | "expect"
+            | "ok"
+            | "err"
+            | "Some"
+            | "None"
+            | "Ok"
+            | "Err"
+            | "clone"
+            | "to_string"
+            | "as_str"
+            | "toBeDefined"
+            | "toBe"
+            | "toEqual"
+            | "describe"
+            | "it"
+            | "test"
+            | "assert"
+            | "assert_eq"
+            | "new"
+            | "default"
+            | "json"
+            | "status"
+            | "Router"
+            | "Flask"
+            | "dumps"
+            | "loads"
+    )
 }
 
 impl Default for ChronosGraph {
@@ -464,6 +696,9 @@ impl Default for ChronosGraph {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GraphStatusReport {
     pub total_nodes: usize,
+    pub total_edges: usize,
+    pub resolved_calls: usize,
+    pub unresolved_calls: usize,
     pub hydrated_nodes: usize,
     pub hot_paths: usize,
     pub bottlenecks: usize,
@@ -485,9 +720,10 @@ impl std::fmt::Display for GraphStatusReport {
              {hydration_status}\n\
              📁 Nodes: {} total ({} functions, {} tests)\n\
              🔥 Hot paths: {} | ⚠️  Bottlenecks: {}\n\
-             🕸️  Edges: (see graph query for details)",
+             🕸️  Edges: {} total (resolved calls: {}, unresolved: {})",
             self.total_nodes, self.function_nodes, self.test_nodes,
-            self.hot_paths, self.bottlenecks
+            self.hot_paths, self.bottlenecks,
+            self.total_edges, self.resolved_calls, self.unresolved_calls
         )
     }
 }

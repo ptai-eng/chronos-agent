@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" width="100%" height="100%" role="img" aria-labelledby="hud-title hud-desc">
+  <title id="hud-title">CHRONOS Developer HUD &amp; VS Code Blast-Radius Inspector</title>
+  <desc id="hud-desc">Terminal-grade developer HUD showing a real TypeScript service inspection, 3-tier Blast-Radius dependency graph, PageRank centrality scores, CoverageReport status, and Mutation Arena results.</desc>
+
+  <!-- Terminal Window Frame (diagram-design Terminal Variant) -->
+  <rect width="1120" height="560" rx="8" fill="#111318"/>
+  <rect x="1" y="1" width="1118" height="558" rx="8" fill="none" stroke="#262936" stroke-width="1.5"/>
+
+  <!-- Window Title Bar -->
+  <rect x="2" y="2" width="1116" height="38" rx="6" fill="#181b22"/>
+  <line x1="2" y1="40" x2="1118" y2="40" stroke="#262936" stroke-width="1"/>
+  <circle cx="24" cy="21" r="5.5" fill="#ff5f56"/>
+  <circle cx="44" cy="21" r="5.5" fill="#ffbd2e"/>
+  <circle cx="64" cy="21" r="5.5" fill="#27c93f"/>
+  <text x="560" y="25" fill="#9ca3b5" font-size="11" font-weight="500" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" text-anchor="middle">chronos-vscode — src/services/orderService.ts — CHRONOS 4D HUD v1.2.0</text>
+  <rect x="984" y="11" width="116" height="20" rx="3" fill="rgba(235,108,54,0.16)" stroke="#eb6c36" stroke-width="0.8"/>
+  <text x="1042" y="24" fill="#eb6c36" font-size="9.5" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">MCP CONNECTED</text>
+
+  <!-- Left Panel: Mutation Gate & Coverage Diagnostics -->
+  <rect x="20" y="56" width="280" height="484" rx="6" fill="#161920" stroke="#262936" stroke-width="1"/>
+  <text x="36" y="80" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">MUTATION ARENA GATE</text>
+  <text x="36" y="116" fill="#f3f4f6" font-size="28" font-weight="700" font-family="'Geist Mono', Consolas, monospace">91.7%</text>
+  <text x="140" y="114" fill="#34c759" font-size="11" font-weight="600" font-family="'Geist Mono', Consolas, monospace">PASSED (≥90%)</text>
+  <text x="36" y="136" fill="#8b92a5" font-size="10" font-family="'Geist Mono', Consolas, monospace">22/24 mutants killed • 4 workers</text>
+  <rect x="36" y="148" width="248" height="6" rx="3" fill="#262936"/>
+  <rect x="36" y="148" width="227" height="6" rx="3" fill="#34c759"/>
+
+  <line x1="36" y1="172" x2="284" y2="172" stroke="#262936" stroke-width="1"/>
+  <text x="36" y="196" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">COVERAGE &amp; UNCERTAINTY</text>
+
+  <text x="36" y="220" fill="#8b92a5" font-size="10" font-family="'Geist Mono', Consolas, monospace">completeness:</text>
+  <text x="284" y="220" fill="#f3f4f6" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">"complete"</text>
+
+  <text x="36" y="240" fill="#8b92a5" font-size="10" font-family="'Geist Mono', Consolas, monospace">resolved_calls:</text>
+  <text x="284" y="240" fill="#34c759" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">48 edges</text>
+
+  <text x="36" y="260" fill="#8b92a5" font-size="10" font-family="'Geist Mono', Consolas, monospace">unresolved_calls:</text>
+  <text x="284" y="260" fill="#ffbd2e" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">1 dynamic</text>
+
+  <text x="36" y="280" fill="#8b92a5" font-size="10" font-family="'Geist Mono', Consolas, monospace">confidence_interval:</text>
+  <text x="284" y="280" fill="#f3f4f6" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">73% – 93%</text>
+
+  <text x="36" y="300" fill="#8b92a5" font-size="10" font-family="'Geist Mono', Consolas, monospace">pagerank_score:</text>
+  <text x="284" y="300" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">0.342 (Top 1)</text>
+
+  <line x1="36" y1="320" x2="284" y2="320" stroke="#262936" stroke-width="1"/>
+  <text x="36" y="344" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">PRE-TOOL CONTRACT GATE</text>
+  <rect x="36" y="356" width="248" height="60" rx="4" fill="rgba(235,108,54,0.10)" stroke="#eb6c36" stroke-width="1"/>
+  <text x="48" y="376" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace">! SIGNATURE DRIFT DETECTED</text>
+  <text x="48" y="394" fill="#d1d5db" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">validatePayment(orderId, currency)</text>
+  <text x="48" y="408" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">3 callers in src/routes/checkout.ts</text>
+
+  <line x1="36" y1="432" x2="284" y2="432" stroke="#262936" stroke-width="1"/>
+  <text x="36" y="456" fill="#8b92a5" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">SANDBOX ISOLATION</text>
+  <text x="36" y="476" fill="#d1d5db" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">node_modules -&gt; Junction Linked</text>
+  <text x="36" y="494" fill="#d1d5db" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">KuzuDB Sync  -&gt; 1,110 nodes / 4,109 edges</text>
+  <text x="36" y="512" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">_meta.provenance.untrusted = true</text>
+
+  <!-- Center Panel: Interactive Blast-Radius Dependency Topology -->
+  <rect x="316" y="56" width="496" height="304" rx="6" fill="#161920" stroke="#262936" stroke-width="1"/>
+  <text x="336" y="80" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">BLAST-RADIUS TOPOLOGY // RISK ZONE: CRITICAL (83%)</text>
+
+  <!-- Orthogonal Connectors inside Blast-Radius View -->
+  <path d="M 444 148 L 492 148 Q 500 148 500 156 L 500 192" fill="none" stroke="#eb6c36" stroke-width="1.5"/>
+  <path d="M 444 268 L 500 268 L 500 232" fill="none" stroke="#eb6c36" stroke-width="1.5"/>
+  <path d="M 628 212 L 668 212 Q 676 212 676 196 L 676 164 L 696 164" fill="none" stroke="#ffbd2e" stroke-width="1.2"/>
+  <path d="M 628 220 L 668 220 Q 676 220 676 236 L 676 268 L 696 268" fill="none" stroke="#34c759" stroke-width="1.2" stroke-dasharray="4,3"/>
+
+  <!-- Caller Node 1 (API Route) -->
+  <rect x="336" y="124" width="108" height="48" rx="4" fill="#1f2430" stroke="#eb6c36" stroke-width="1.2"/>
+  <text x="390" y="144" fill="#f3f4f6" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">POST /orders</text>
+  <text x="390" y="160" fill="#eb6c36" font-size="8.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">ApiRoute • HOT</text>
+
+  <!-- Caller Node 2 (Service Caller) -->
+  <rect x="336" y="244" width="108" height="48" rx="4" fill="#1f2430" stroke="#ffbd2e" stroke-width="1.2"/>
+  <text x="390" y="264" fill="#f3f4f6" font-size="10" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">checkoutBatch</text>
+  <text x="390" y="280" fill="#ffbd2e" font-size="8.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Direct Caller</text>
+
+  <!-- Central Changed Symbol (Focal) -->
+  <rect x="468" y="184" width="160" height="56" rx="6" fill="rgba(235,108,54,0.18)" stroke="#eb6c36" stroke-width="2"/>
+  <text x="548" y="208" fill="#ffffff" font-size="12" font-weight="700" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">validatePayment</text>
+  <text x="548" y="226" fill="#eb6c36" font-size="9" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CHANGED • p99: 42.4ms</text>
+
+  <!-- Downstream / Covering Test Nodes -->
+  <rect x="696" y="140" width="96" height="48" rx="4" fill="#1f2430" stroke="#ffbd2e" stroke-width="1"/>
+  <text x="744" y="160" fill="#f3f4f6" font-size="9.5" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">chargeCard</text>
+  <text x="744" y="176" fill="#8b92a5" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Callee • L88</text>
+
+  <rect x="696" y="244" width="96" height="48" rx="4" fill="#1f2430" stroke="#34c759" stroke-width="1"/>
+  <text x="744" y="264" fill="#f3f4f6" font-size="9.5" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">order.spec.ts</text>
+  <text x="744" y="280" fill="#34c759" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Covering Test</text>
+
+  <!-- Legend inside Topology Panel -->
+  <circle cx="344" cy="336" r="4" fill="#eb6c36"/>
+  <text x="354" y="340" fill="#9ca3b5" font-size="9" font-family="'Geist Mono', Consolas, monospace">Zone 1: Critical (Hot-Path + Contract)</text>
+  <circle cx="556" cy="336" r="4" fill="#ffbd2e"/>
+  <text x="566" y="340" fill="#9ca3b5" font-size="9" font-family="'Geist Mono', Consolas, monospace">Zone 2: High Impact</text>
+  <circle cx="696" cy="336" r="4" fill="#34c759"/>
+  <text x="706" y="340" fill="#9ca3b5" font-size="9" font-family="'Geist Mono', Consolas, monospace">Selected Test</text>
+
+  <!-- Bottom Center+Right Panel: Real Code Editor with Inline Lens -->
+  <rect x="316" y="376" width="784" height="164" rx="6" fill="#161920" stroke="#262936" stroke-width="1"/>
+  <text x="336" y="400" fill="#8b92a5" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">src/services/orderService.ts — Inline CHRONOS 4D CodeLens</text>
+  <line x1="316" y1="412" x2="1100" y2="412" stroke="#262936" stroke-width="1"/>
+
+  <text x="336" y="432" fill="#eb6c36" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">⚡ CHRONOS: Risk CRITICAL (83%, CI: 73%–93%) | 3 Direct Callers | PageRank: 0.342 | Mutation Score: 91.7%</text>
+  <text x="336" y="454" fill="#6b7280" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">42</text>
+  <text x="368" y="454" fill="#93c5fd" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">export async function</text>
+  <text x="516" y="454" fill="#fde047" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">validatePayment</text>
+  <text x="624" y="454" fill="#e5e7eb" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">(orderId: string, currency: Currency): Promise&lt;Receipt&gt; {</text>
+
+  <text x="336" y="474" fill="#6b7280" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">43</text>
+  <text x="384" y="474" fill="#e5e7eb" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">if (orderId.trim().length === 0) throw new InvalidOrderError(orderId);</text>
+
+  <text x="336" y="494" fill="#6b7280" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">44</text>
+  <text x="384" y="494" fill="#e5e7eb" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">return await chargeCard(orderId, currency);</text>
+
+  <text x="336" y="514" fill="#6b7280" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">45</text>
+  <text x="368" y="514" fill="#e5e7eb" font-size="10.5" font-family="'Geist Mono', Consolas, monospace">}</text>
+
+  <!-- Right Panel: Runtime Telemetry & PageRank Bottlenecks -->
+  <rect x="828" y="56" width="272" height="304" rx="6" fill="#161920" stroke="#262936" stroke-width="1"/>
+  <text x="844" y="80" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">V8 CDP + PAGERANK HOTSPOTS</text>
+
+  <text x="844" y="108" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">1. validatePayment</text>
+  <text x="1084" y="108" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">p99: 42.4ms</text>
+  <rect x="844" y="116" width="240" height="5" rx="2" fill="#262936"/>
+  <rect x="844" y="116" width="212" height="5" rx="2" fill="#eb6c36"/>
+
+  <text x="844" y="148" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">2. processOrdersWithUser</text>
+  <text x="1084" y="148" fill="#ffbd2e" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">p99: 28.1ms</text>
+  <rect x="844" y="156" width="240" height="5" rx="2" fill="#262936"/>
+  <rect x="844" y="156" width="156" height="5" rx="2" fill="#ffbd2e"/>
+
+  <text x="844" y="188" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">3. chargeCard</text>
+  <text x="1084" y="188" fill="#34c759" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">p99: 11.2ms</text>
+  <rect x="844" y="196" width="240" height="5" rx="2" fill="#262936"/>
+  <rect x="844" y="196" width="84" height="5" rx="2" fill="#34c759"/>
+
+  <line x1="844" y1="220" x2="1084" y2="220" stroke="#262936" stroke-width="1"/>
+  <text x="844" y="244" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">GIT DIFF CI GATE</text>
+  <text x="844" y="268" fill="#d1d5db" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">$ chronos diff --staged --ci</text>
+  <text x="844" y="290" fill="#ff5f56" font-size="9.5" font-weight="600" font-family="'Geist Mono', Consolas, monospace">BLOCKED (exit code 1)</text>
+  <text x="844" y="310" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">AST span match: L42..L45</text>
+  <text x="844" y="328" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">Run: order.spec.ts (2 tests)</text>
+</svg>

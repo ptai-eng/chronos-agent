@@ -10,9 +10,14 @@ pub fn generate_glance_markdown(report: &BlastRadiusReport) -> String {
     let risk_emoji = report.overall_risk.emoji();
     let risk_label = report.overall_risk.label();
     let score_pct = (report.impact_score * 100.0) as u32;
+    let ci_low_pct = (report.confidence_interval.0 * 100.0) as u32;
+    let ci_high_pct = (report.confidence_interval.1 * 100.0) as u32;
 
     let mut lines = vec![
-        format!("## {} CHRONOS Blast-Radius: **{}** ({score_pct}% risk)", risk_emoji, risk_label),
+        format!(
+            "## {} CHRONOS Blast-Radius: **{}** ({score_pct}% risk, CI: {ci_low_pct}%–{ci_high_pct}%, PageRank: {:.3})",
+            risk_emoji, risk_label, report.pagerank_score
+        ),
     ];
 
     // Line 2: Changed functions
@@ -30,7 +35,19 @@ pub fn generate_glance_markdown(report: &BlastRadiusReport) -> String {
         contract_indicator,
     ));
 
-    // Line 4: Top affected nodes (max 3)
+    // Line 4: Coverage & Residual Unknowns
+    lines.push(format!(
+        "**Coverage:** `{}` (resolved calls: {}, unresolved: {}, telemetry: {})",
+        report.coverage.completeness,
+        report.coverage.resolved_calls,
+        report.coverage.unresolved_calls,
+        if report.coverage.telemetry_hydrated { "hydrated" } else { "cold" },
+    ));
+    if !report.residual_unknowns.is_empty() {
+        lines.push(format!("**Residual Unknowns:** {}", report.residual_unknowns.join("; ")));
+    }
+
+    // Line 5: Top affected nodes (max 3)
     let top_affected: Vec<String> = report.affected_nodes.iter()
         .take(3)
         .map(|n| format!("`{}` ({})", n.node_name, n.risk_zone.label()))
@@ -39,7 +56,7 @@ pub fn generate_glance_markdown(report: &BlastRadiusReport) -> String {
         lines.push(format!("**Top affected:** {}", top_affected.join(", ")));
     }
 
-    // Line 5: API routes (if any)
+    // Line 6: API routes (if any)
     if !report.affected_routes.is_empty() {
         let routes: Vec<String> = report.affected_routes.iter().take(3)
             .map(|r| format!("`{}`", r))
@@ -60,23 +77,28 @@ pub fn generate_inline_status(report: &BlastRadiusReport) -> String {
     let emoji = report.overall_risk.emoji();
     let label = report.overall_risk.label();
     format!(
-        "{emoji} [{label}] {} callers affected (hot-path: {}, contract: {})",
+        "{emoji} [{label}] {} callers affected (hot-path: {}, contract: {}, coverage: {})",
         report.direct_callers_count + report.transitive_callers_count,
         if report.hot_path_affected { "YES" } else { "no" },
         if report.contract_breaking { "BREAKING" } else { "safe" },
+        report.coverage.completeness,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blast_radius::impact_matrix::{AffectedNode, BlastRadiusReport, RiskZone};
+    use crate::blast_radius::impact_matrix::{AffectedNode, BlastRadiusReport, CoverageReport, RiskZone};
 
     fn make_report(risk: RiskZone, direct: usize, transitive: usize, hot: bool, contract: bool) -> BlastRadiusReport {
         BlastRadiusReport {
             changed_nodes: vec!["getUser".to_string()],
             overall_risk: risk,
             impact_score: 0.8,
+            confidence_interval: (0.65, 0.95),
+            pagerank_score: 0.25,
+            coverage: CoverageReport::default(),
+            residual_unknowns: vec![],
             affected_nodes: (0..direct.min(3))
                 .map(|i| AffectedNode {
                     node_name: format!("caller_{}", i),

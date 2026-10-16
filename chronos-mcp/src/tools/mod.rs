@@ -73,6 +73,12 @@ pub fn all_tools() -> Vec<McpTool> {
                         "type": "boolean",
                         "description": "Set true if this change modifies the public API signature",
                         "default": false
+                    },
+                    "detail": {
+                        "type": "string",
+                        "enum": ["summary", "complete"],
+                        "description": "Output verbosity: 'summary' (compact 30s glance) or 'complete' (writes full HTML dashboard)",
+                        "default": "summary"
                     }
                 },
                 "required": ["symbol_name"]

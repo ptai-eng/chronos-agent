@@ -106,7 +106,7 @@ async fn pillar2_mutation_arena_no_crash_on_fixture() {
 
     // With `echo` as test runner all mutants timeout/survive, but score logic should still run
     assert_eq!(report.target_file, fixture.to_string_lossy().to_string());
-    assert!(report.total_mutants >= 0); // Can be zero if file has no mutable patterns
+    assert!(report.killed_mutants <= report.total_mutants);
 
     println!("✅ Pillar 2 — Mutation arena: {} mutants, {}/{} killed, score={:.1}%",
         report.total_mutants, report.killed_mutants, report.total_mutants,
@@ -191,4 +191,107 @@ fn pillar4_blast_radius_contract_breaking_raises_risk() {
 
     println!("✅ Pillar 4 — Contract-breaking impact: {:.2} vs normal {:.2}",
         breaking.impact_score, normal.impact_score);
+}
+
+// ── v1.2 Tests: Call Edges, PageRank, CoverageReport, Multi-Language AST ─────
+
+#[test]
+fn v1_2_typescript_call_and_test_edges_and_pagerank() {
+    let mut parser = TypeScriptParser::new().expect("TS parser");
+    let src = r#"
+        export function validateOrder(amount: number): boolean {
+            return amount > 0;
+        }
+
+        export function processOrder(amount: number): boolean {
+            return validateOrder(amount);
+        }
+
+        it("validates and processes order", () => {
+            expect(processOrder(100)).toBe(true);
+        });
+    "#;
+    let parsed = parser.parse_source(&PathBuf::from("src/order.spec.ts"), src).expect("parse TS");
+    let mut graph = ChronosGraph::new();
+    let (nodes, edges) = graph.ingest_parsed_module(&parsed);
+
+    assert_eq!(nodes, 3, "2 functions + 1 test case");
+    assert!(edges >= 2, "processOrder -> validateOrder (Calls) + test -> processOrder (Tests)");
+
+    let pr = graph.compute_pagerank(20, 0.85);
+    assert_eq!(pr.len(), 3);
+
+    let validate_id = graph.nodes_by_kind(&NodeKind::Function)
+        .into_iter()
+        .find(|n| n.name == "validateOrder")
+        .unwrap()
+        .id
+        .clone();
+    let process_id = graph.nodes_by_kind(&NodeKind::Function)
+        .into_iter()
+        .find(|n| n.name == "processOrder")
+        .unwrap()
+        .id
+        .clone();
+
+    assert!(
+        pr[&validate_id] > pr[&process_id],
+        "callee validateOrder should have higher PageRank than caller processOrder"
+    );
+
+    let analyzer = ImpactAnalyzer::new(&graph);
+    let report = analyzer.analyze(&validate_id, false);
+    assert_eq!(report.direct_callers_count, 1);
+    assert!(report.coverage.call_edges_available);
+    assert_eq!(report.coverage.completeness, "partial"); // telemetry is cold
+    assert!(report.confidence_interval.1 > report.confidence_interval.0);
+}
+
+#[test]
+fn v1_2_python_and_rust_parsers_extract_call_edges() {
+    use chronos_core::ast::{py_parser::PythonParser, rs_parser::RustParser};
+
+    // Python call graph + test linkage
+    let mut py = PythonParser::new().expect("Py parser");
+    let py_src = r#"
+def compute_tax(price):
+    if price > 100:
+        return price * 0.2
+    return price * 0.1
+
+def checkout(price):
+    return price + compute_tax(price)
+
+def test_checkout():
+    assert checkout(50) == 55
+"#;
+    let py_parsed = py.parse_str(py_src, &PathBuf::from("app/billing.py")).expect("parse py");
+    let mut py_graph = ChronosGraph::new();
+    let (_py_nodes, py_edges) = py_graph.ingest_parsed_module(&py_parsed);
+    assert!(py_edges >= 2, "Python should link checkout->compute_tax and test_checkout->checkout");
+
+    // Rust call graph + test linkage
+    let mut rs = RustParser::new().expect("Rs parser");
+    let rs_src = r#"
+pub fn hash_token(raw: &str) -> usize {
+    if raw.is_empty() {
+        return 0;
+    }
+    raw.len()
+}
+
+pub fn verify_session(token: &str) -> bool {
+    let h = hash_token(token);
+    h > 0
+}
+
+#[test]
+fn test_verify_session() {
+    assert!(verify_session("abc"));
+}
+"#;
+    let rs_parsed = rs.parse_str(rs_src, &PathBuf::from("src/auth.rs")).expect("parse rs");
+    let mut rs_graph = ChronosGraph::new();
+    let (_rs_nodes, rs_edges) = rs_graph.ingest_parsed_module(&rs_parsed);
+    assert!(rs_edges >= 2, "Rust should link verify_session->hash_token and test_verify_session->verify_session");
 }

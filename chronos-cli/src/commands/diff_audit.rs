@@ -101,38 +101,71 @@ impl DiffMode {
     }
 }
 
-/// Parse unified diff output to extract changed files + line ranges
+/// Parse unified diff output to extract changed files + line ranges, mapping modified lines
+/// against full AST symbol ranges (`start_line..=end_line`) when the file exists on disk.
 fn parse_unified_diff(diff: &str, working_dir: &Path) -> Result<Vec<ChangedSymbol>> {
+    use chronos_core::ast::dispatcher::LanguageDispatcher;
+    use std::collections::{HashMap, HashSet};
+
     let mut symbols: Vec<ChangedSymbol> = Vec::new();
+    let mut seen_keys: HashSet<(PathBuf, String)> = HashSet::new();
+    let mut modified_lines_by_file: HashMap<PathBuf, Vec<usize>> = HashMap::new();
     let mut current_file: Option<PathBuf> = None;
     let mut current_line: usize = 0;
 
     for line in diff.lines() {
         if line.starts_with("+++ b/") {
-            // New file being diffed
             let rel_path = line.trim_start_matches("+++ b/");
             current_file = Some(working_dir.join(rel_path));
         } else if line.starts_with("@@ ") {
-            // @@ -old_start,old_count +new_start,new_count @@
             if let Some(new_range) = parse_hunk_header(line) {
                 current_line = new_range;
             }
         } else if line.starts_with('+') && !line.starts_with("+++") {
-            // Added line — check if it's a function/class definition
             let content = &line[1..];
-            if let Some(sym) = extract_symbol_from_line(content, current_line) {
-                if let Some(ref file) = current_file {
-                    symbols.push(ChangedSymbol {
-                        file: file.clone(),
-                        symbol_name: sym,
-                        start_line: current_line,
-                        change_type: ChangeType::Modified,
-                    });
+            if let Some(ref file) = current_file {
+                modified_lines_by_file.entry(file.clone()).or_default().push(current_line);
+                if let Some(sym) = extract_symbol_from_line(content, current_line) {
+                    let key = (file.clone(), sym.clone());
+                    if seen_keys.insert(key) {
+                        symbols.push(ChangedSymbol {
+                            file: file.clone(),
+                            symbol_name: sym,
+                            start_line: current_line,
+                            change_type: ChangeType::Modified,
+                        });
+                    }
                 }
             }
             current_line += 1;
         } else if !line.starts_with('-') {
             current_line += 1;
+        }
+    }
+
+    // AST-aware span matching: check if any modified line falls inside `node.location.start_line..=end_line`
+    if let Ok(mut dispatcher) = LanguageDispatcher::new() {
+        for (file, mod_lines) in &modified_lines_by_file {
+            if file.exists() && LanguageDispatcher::is_supported(file) {
+                if let Ok(parsed) = dispatcher.parse_file(file) {
+                    for node in parsed.functions.iter().chain(parsed.classes.iter()) {
+                        let overlaps = mod_lines.iter().any(|&line_no| {
+                            line_no >= node.location.start_line && line_no <= node.location.end_line
+                        });
+                        if overlaps {
+                            let key = (file.clone(), node.name.clone());
+                            if seen_keys.insert(key) {
+                                symbols.push(ChangedSymbol {
+                                    file: file.clone(),
+                                    symbol_name: node.name.clone(),
+                                    start_line: node.location.start_line,
+                                    change_type: ChangeType::Modified,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

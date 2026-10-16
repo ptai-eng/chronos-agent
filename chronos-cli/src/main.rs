@@ -149,31 +149,91 @@ async fn main() -> Result<()> {
                 }
             };
 
-            // Build a lightweight impact report (without full graph — fast path)
+            // Build a 4D graph across changed files and compute real blast-radius impact
+            use chronos_core::{
+                ast::dispatcher::LanguageDispatcher,
+                blast_radius::impact_matrix::{ImpactAnalyzer, RiskZone},
+                graph::schema::{ChronosGraph, NodeKind},
+            };
+            use std::collections::HashSet;
+
+            let mut graph = ChronosGraph::new();
+            if let Ok(mut dispatcher) = LanguageDispatcher::new() {
+                let unique_files: HashSet<_> = symbols.iter().map(|s| s.file.clone()).collect();
+                for file in unique_files {
+                    if file.exists() && LanguageDispatcher::is_supported(&file) {
+                        if let Ok(parsed) = dispatcher.parse_file(&file) {
+                            graph.ingest_parsed_module(&parsed);
+                        }
+                    }
+                }
+            }
+
+            let analyzer = ImpactAnalyzer::new(&graph);
+            let all_nodes = graph.all_nodes();
+            let mut changed_ids = Vec::new();
+
             let symbol_reports: Vec<SymbolImpact> = symbols.iter().map(|s| {
-                SymbolImpact {
-                    symbol: s.symbol_name.clone(),
-                    file: s.file.to_string_lossy().to_string(),
-                    risk_level: "UNKNOWN".to_string(), // Full graph needed for real score
-                    direct_callers: 0,
-                    transitive_callers: 0,
-                    recommended_test_modules: vec![],
+                let matched_node = all_nodes.iter().find(|n| {
+                    n.name == s.symbol_name && n.location.file == s.file
+                }).or_else(|| {
+                    all_nodes.iter().find(|n| n.name == s.symbol_name)
+                });
+
+                if let Some(node) = matched_node {
+                    changed_ids.push(node.id.clone());
+                    let impact = analyzer.analyze(&node.id, false);
+                    let covering_tests = graph.tests_for(&node.id)
+                        .into_iter()
+                        .map(|t| t.name.clone())
+                        .collect();
+                    SymbolImpact {
+                        symbol: s.symbol_name.clone(),
+                        file: s.file.to_string_lossy().to_string(),
+                        risk_level: impact.overall_risk.label().to_string(),
+                        direct_callers: impact.direct_callers_count,
+                        transitive_callers: impact.transitive_callers_count,
+                        recommended_test_modules: covering_tests,
+                    }
+                } else {
+                    SymbolImpact {
+                        symbol: s.symbol_name.clone(),
+                        file: s.file.to_string_lossy().to_string(),
+                        risk_level: "SAFE".to_string(),
+                        direct_callers: 0,
+                        transitive_callers: 0,
+                        recommended_test_modules: vec![],
+                    }
                 }
             }).collect();
 
-            let has_high_risk = false; // Requires full graph for real analysis
+            let id_refs: Vec<_> = changed_ids.iter().collect();
+            let diff_summary = analyzer.analyze_diff(&id_refs);
+            let has_high_risk = matches!(diff_summary.overall_risk, RiskZone::High | RiskZone::Critical);
+            let overall_risk_str = if symbols.is_empty() {
+                "SAFE (0 changed symbols)".to_string()
+            } else {
+                format!(
+                    "{} ({:.0}% impact, coverage: {})",
+                    diff_summary.overall_risk.label(),
+                    diff_summary.impact_score * 100.0,
+                    diff_summary.coverage.completeness,
+                )
+            };
+
+            let _ = NodeKind::Function; // keep import clean
             let report = DiffBlastRadiusReport {
                 changed_symbols: symbols,
                 symbol_reports,
-                overall_risk: "UNKNOWN — run chronos audit for full analysis".to_string(),
-                exit_code_for_ci: 0,
+                overall_risk: overall_risk_str,
+                exit_code_for_ci: if has_high_risk { 1 } else { 0 },
             };
 
             if json {
                 println!("{}", format_json(&report));
             } else {
                 println!("{}", format_markdown(&report));
-                println!("\n💡 For full blast-radius scores, run: chronos audit <file>");
+                println!("\n💡 For full mutation + blast-radius audit, run: chronos audit <file>");
             }
 
             if ci && has_high_risk {

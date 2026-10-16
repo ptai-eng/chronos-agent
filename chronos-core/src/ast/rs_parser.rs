@@ -44,13 +44,14 @@ impl RustParser {
             !t.is_empty() && !t.starts_with("//")
         }).count();
 
-        self.visit_node(root, src_bytes, path, &mut module, false);
+        self.visit_node(root, src_bytes, path, &mut module, false, None);
         Ok(module)
     }
 
     fn make_node(
         &self,
         tree_node: tree_sitter::Node,
+        src: &[u8],
         path: &Path,
         name: &str,
         kind: NodeKind,
@@ -70,11 +71,29 @@ impl RustParser {
             end_line: tree_node.end_position().row + 1,
             end_col: tree_node.end_position().column,
         };
-        let mut node = ChronosNode::new(id, kind, name, qualified_name, location);
-        node.heuristics = StaticHeuristics {
+        let fn_text = tree_node.utf8_text(src).unwrap_or("");
+        let mut cyc = 1u32;
+        for kw in &["if ", "else if", "for ", "while ", "loop ", "match ", "&&", "||", "?"] {
+            cyc += fn_text.matches(kw).count() as u32;
+        }
+        let sloc = fn_text
+            .lines()
+            .filter(|l| {
+                let t = l.trim();
+                !t.is_empty() && !t.starts_with("//")
+            })
+            .count() as u32;
+
+        let mut heuristics = StaticHeuristics {
+            cyclomatic_complexity: cyc,
             param_count,
+            sloc,
             ..StaticHeuristics::default()
         };
+        heuristics.compute_cognitive_load();
+
+        let mut node = ChronosNode::new(id, kind, name, qualified_name, location);
+        node.heuristics = heuristics;
         node
     }
 
@@ -85,10 +104,13 @@ impl RustParser {
         path: &Path,
         module: &mut ParsedModule,
         in_test_mod: bool,
+        current_function: Option<&str>,
     ) {
+        let mut next_fn_owned: Option<String> = None;
+
         match node.kind() {
             "function_item" => {
-                self.extract_function(node, src, path, module, in_test_mod);
+                next_fn_owned = self.extract_function(node, src, path, module, in_test_mod);
             }
             "struct_item" => {
                 self.extract_struct(node, src, path, module);
@@ -97,16 +119,36 @@ impl RustParser {
                 self.extract_use(node, src, path, module);
             }
             "call_expression" => {
-                self.extract_call(node, src, module);
+                self.extract_call(node, src, module, current_function);
+            }
+            "token_tree" => {
+                if let Some(caller) = current_function {
+                    let mut cursor = node.walk();
+                    let children: Vec<_> = node.children(&mut cursor).collect();
+                    for window in children.windows(2) {
+                        if window[0].kind() == "identifier" && window[1].kind() == "token_tree" {
+                            if let Ok(callee_name) = window[0].utf8_text(src) {
+                                if !callee_name.is_empty() && caller != callee_name {
+                                    module.call_refs.push(CallRef {
+                                        caller_name: caller.to_string(),
+                                        callee_name: callee_name.to_string(),
+                                        call_site_line: window[0].start_position().row + 1,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
             }
             _ => {}
         }
 
         let is_test_mod = in_test_mod || self.is_test_module(node, src);
+        let active_fn = next_fn_owned.as_deref().or(current_function);
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            self.visit_node(child, src, path, module, is_test_mod);
+            self.visit_node(child, src, path, module, is_test_mod, active_fn);
         }
     }
 
@@ -136,13 +178,11 @@ impl RustParser {
         path: &Path,
         module: &mut ParsedModule,
         in_test_mod: bool,
-    ) {
-        let name = match node.child_by_field_name("name")
-            .and_then(|n| n.utf8_text(src).ok())
-        {
-            Some(n) => n.to_string(),
-            None => return,
-        };
+    ) -> Option<String> {
+        let name = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(src).ok())?
+            .to_string();
 
         let is_test = in_test_mod || name.starts_with("test_");
         let is_exported = node.child_by_field_name("visibility_modifier").is_some();
@@ -152,13 +192,14 @@ impl RustParser {
             .unwrap_or(0);
 
         let kind = if is_test { NodeKind::TestCase } else { NodeKind::Function };
-        let chronos_node = self.make_node(node, path, &name, kind, param_count, is_exported);
+        let chronos_node = self.make_node(node, src, path, &name, kind, param_count, is_exported);
 
         if is_test {
             module.test_cases.push(chronos_node);
         } else {
             module.functions.push(chronos_node);
         }
+        Some(name)
     }
 
     fn extract_struct(
@@ -176,7 +217,7 @@ impl RustParser {
         };
 
         let is_exported = node.child_by_field_name("visibility_modifier").is_some();
-        let chronos_node = self.make_node(node, path, &name, NodeKind::Class, 0, is_exported);
+        let chronos_node = self.make_node(node, src, path, &name, NodeKind::Class, 0, is_exported);
         module.classes.push(chronos_node);
     }
 
@@ -212,14 +253,28 @@ impl RustParser {
         node: tree_sitter::Node,
         src: &[u8],
         module: &mut ParsedModule,
+        current_function: Option<&str>,
     ) {
         let func_node = match node.child_by_field_name("function") {
             Some(n) => n,
             None => return,
         };
 
+        if matches!(
+            func_node.kind(),
+            "index_expression" | "parenthesized_expression" | "call_expression"
+        ) {
+            module.unresolved_call_sites += 1;
+            return;
+        }
+
         let callee = match func_node.utf8_text(src) {
-            Ok(t) => t.split("::").last().unwrap_or(t).to_string(),
+            Ok(t) => t
+                .rsplit(|c| c == ':' || c == '.')
+                .next()
+                .unwrap_or(t)
+                .trim()
+                .to_string(),
             Err(_) => return,
         };
 
@@ -227,11 +282,13 @@ impl RustParser {
             return;
         }
 
-        module.call_refs.push(CallRef {
-            caller_name: String::new(),
-            callee_name: callee,
-            call_site_line: node.start_position().row + 1,
-        });
+        if let Some(caller) = current_function {
+            module.call_refs.push(CallRef {
+                caller_name: caller.to_string(),
+                callee_name: callee,
+                call_site_line: node.start_position().row + 1,
+            });
+        }
     }
 }
 

@@ -1,138 +1,126 @@
 <p align="center">
-  <img src="assets/chronos_hero_banner.jpg" alt="CHRONOS-AGENT Hero Banner" width="100%" style="border-radius: 12px;"/>
+  <img src="assets/chronos_hero_banner.jpg" alt="CHRONOS-AGENT Tactile Hardware Banner" width="100%" style="border-radius: 12px;"/>
 </p>
 
-<h1 align="center">🧠⚡ CHRONOS-AGENT</h1>
+<h1 align="center">CHRONOS-AGENT</h1>
 
 <p align="center">
-  <strong>4D Living Code Intelligence Harness &amp; Real-Time Blast-Radius Protection for Autonomous AI Agents</strong>
+  <strong>4D Living Code Graph, PageRank Blast-Radius Analysis &amp; Isolated Mutation Gating for AI Coding Agents</strong>
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
-  <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.98%20%7C%202024%20Edition-orange?logo=rust&logoColor=white" alt="Rust Version"></a>
-  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-91%2F91%20Passing-brightgreen?logo=checkmarx&logoColor=white" alt="Tests"></a>
-  <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-2024--11--05-blue?logo=protocol&logoColor=white" alt="MCP Protocol"></a>
-  <a href="./integrations/INTEGRATIONS.md"><img src="https://img.shields.io/badge/AI%20Clients-9%20Supported-purple?logo=openai&logoColor=white" alt="AI Clients"></a>
-  <a href="https://github.com/ptai-eng/chronos-agent/releases"><img src="https://img.shields.io/badge/Release-Pre--compiled%20Binaries-success" alt="Precompiled Binaries"></a>
-  <a href="#-whats-new-in-v110"><img src="https://img.shields.io/badge/Languages-TypeScript%20%7C%20Python%20%7C%20Rust-informational" alt="Languages"></a>
-  <a href="#-security--privacy-notice-nvidia-skillspector-alert"><img src="https://img.shields.io/badge/Security-SkillSpector%20Audited-red" alt="Security Notice"></a>
+  <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.2.0"><img src="https://img.shields.io/badge/Version-1.2.0-111827?style=flat-square" alt="Version 1.2.0"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
+  <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-2024%20Edition-EB6C36?style=flat-square&logo=rust&logoColor=white" alt="Rust Version"></a>
+  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-94%2F94%20Passing-1A7F5A?style=flat-square" alt="Tests 94/94 Passing"></a>
+  <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-2024--11--05-2E5AA8?style=flat-square" alt="MCP Protocol"></a>
+  <a href="./integrations/INTEGRATIONS.md"><img src="https://img.shields.io/badge/AI%20Clients-9%20Supported-4B5563?style=flat-square" alt="AI Clients"></a>
+  <a href="#-security--privacy-notice-nvidia-skillspector-alert"><img src="https://img.shields.io/badge/Security-SkillSpector%20Audited-B42318?style=flat-square" alt="Security Notice"></a>
 </p>
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 
-- [🆕 What's New in v1.1.0](#-whats-new-in-v110)
-- [⚡ The Paradigm Shift](#-the-paradigm-shift)
-- [🏛️ Core Architecture: The 4 Pillars](#️-core-architecture-the-4-pillars)
-- [📊 Capability Matrix &amp; Benchmark](#-capability-matrix--benchmark)
-- [🖥️ Developer HUD &amp; VS Code Extension](#️-developer-hud--vs-code-extension)
-- [🔌 Universal AI Integrations (9 Clients)](#-universal-ai-integrations-9-clients)
-- [🚀 Quickstart &amp; Installation](#-quickstart--installation)
-- [🛠️ CLI Command Suite](#️-cli-command-suite)
-- [🛡️ Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)](#️-security--privacy-notice-nvidia-skillspector-alert)
-- [🧪 Verification &amp; Test Matrix](#-verification--test-matrix)
-- [🗺️ Roadmap &amp; Milestones](#️-roadmap--milestones)
-
----
-
-## 🆕 What's New in v1.1.0
-
-| Area | Change |
-|---|---|
-| 🌐 **Multi-language parsing** | `chronos audit` and the `chronos_analyze_file` MCP tool now accept `.ts` `.tsx` `.js` `.py` `.rs`. Python support detects Flask/FastAPI routes, decorated classes and `def test_*`. Rust support detects `fn`, `struct`, `use` and `#[cfg(test)]` modules. |
-| 🧬 **Parallel mutation testing** | Each mutant runs in its own sandboxed copy of the project (temp dir, auto-cleaned). Concurrency is capped by `max_concurrency` (default 4), so mutants no longer queue behind one another on a shared source file. |
-| 📡 **Real-time file watcher** | The MCP server re-parses changed source files into the graph automatically (300 ms debounce). Pass `--no-watch` to disable it in CI. |
-| 🔀 **`chronos diff`** | Lists the functions touched by unstaged, staged, a single commit or a PR range. Outputs Markdown or `--json` for CI scripts. |
-| 🛡️ **Security & stability fixes** | Path-traversal guard on `chronos_analyze_file` (paths must resolve inside the workspace). No more panic when an impact score is `NaN`. Call-edge resolution went from O(N×M) to O(N) with a name index. |
-
-> [!NOTE]
-> **Known limitations in v1.1.0**
-> - `chronos diff` reports *which* symbols changed, but risk scoring is not wired in yet (`risk_level` shows `UNKNOWN`), so `--ci` does not block builds yet.
-> - The file watcher inserts nodes but does not yet rebuild call edges, persist to KuzuDB, or remove nodes of deleted files.
-> - Mutation sandboxes skip `node_modules`. Test runners that need local dependencies may have to resolve them from a parent directory.
+- [What's New in v1.2.0](#whats-new-in-v120)
+- [Why CHRONOS Exists](#why-chronos-exists)
+- [Core Architecture: The 4 Pillars](#core-architecture-the-4-pillars)
+- [Capability Matrix &amp; Benchmark](#capability-matrix--benchmark)
+- [Developer HUD &amp; VS Code Extension](#developer-hud--vs-code-extension)
+- [Universal AI Integrations (9 Clients)](#universal-ai-integrations-9-clients)
+- [Quickstart &amp; Installation](#quickstart--installation)
+- [CLI Command Suite](#cli-command-suite)
+- [Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)](#security--privacy-notice-nvidia-skillspector-alert)
+- [Verification &amp; Test Matrix](#verification--test-matrix)
+- [Roadmap &amp; Milestones](#roadmap--milestones)
 
 ---
 
-## ⚡ The Paradigm Shift
+## What's New in v1.2.0
 
-Traditional AI coding models generate code based on **static text probabilities**. They are completely blind to runtime memory pressure, execution bottlenecks, and invisible downstream ripple effects:
+`v1.2.0` resolves every architectural limitation from `v1.1.0` and upgrades the graph, MCP server, and CLI to strict metrological and provenance contracts:
 
-> **The Problem:** Modifying a seemingly harmless utility function in Module A unexpectedly breaks payment processing in Module Z because the AI cannot see cross-file call paths or live telemetry.
-
-**CHRONOS-AGENT** bridges this gap by providing AI agents with **multidimensional spatial and runtime awareness (4D Living Code Intelligence)**. It combines static AST graph topologies with live execution metrics (CDP V8 + eBPF), enforcing pre-tool safety gates and automated mutation testing before any code modification is committed.
+| Subsystem | v1.2.0 Upgrade |
+| :--- | :--- |
+| **Multi-Language Call &amp; Test Edges** | Full caller-to-callee (`CALLS`) and test-to-function (`TESTS`) edge extraction across **TypeScript/JS**, **Python** (`pytest` / `unittest`), and **Rust** (including calls inside `assert!` / `assert_eq!` macro `token_tree` blocks). |
+| **Full KuzuDB Edge Persistence** | `PersistentGraph` now persists and reloads all four relationship tables (`CALLS`, `CONTAINS`, `TESTS`, `IMPORTS`) alongside `CodeSymbol` nodes via parameterized Cypher queries. |
+| **PageRank &amp; Uncertainty Propagation** | `ImpactAnalyzer` combines 20-iteration damped PageRank ($\alpha = 0.85$), structural blast radius, test coverage deficits, and live telemetry into a single risk score with explicit $[low, high]$ confidence intervals (`confidence_interval`), `coverage` completeness (`complete` \| `partial`), and `residual_unknowns`. |
+| **Real `chronos diff --ci` Risk Gate** | `chronos diff` parses modified files with `LanguageDispatcher`, matches Git diff hunks against full AST function spans (`start_line..=end_line`), computes true `ImpactReport` risk levels (`LOW` / `MEDIUM` / `HIGH`), and exits non-zero under `--ci` when high-risk changes are detected. |
+| **Zero-Copy Dependency Sandboxes** | `MutantSandbox` automatically links `node_modules`, `.venv`, and `venv` into each isolated worker directory via symbolic links or Windows Directory Junctions (`mklink /J`), eliminating dependency resolution failures during parallel mutation runs and detaching junctions cleanly before cleanup. |
+| **MCP Provenance &amp; Progressive Detail** | All 5 MCP tools attach `_meta.provenance.untrusted_content = true` when returning identifiers parsed from repository source files and support `detail: "summary" \| "complete"` to protect LLM context windows. |
 
 ---
 
-## 🏛️ Core Architecture: The 4 Pillars
+## Why CHRONOS Exists
+
+AI coding agents read source files as flat text buffers. When an agent edits a utility function in `Module A`, it cannot see whether that function sits on a high-PageRank call path, lacks semantic assertions in its test suite, or runs inside a hot CPU loop in production.
+
+**CHRONOS-AGENT** gives autonomous coding agents a live structural and runtime harness:
+
+1. **Structural Topology + PageRank:** Builds a multi-language AST graph (`Petgraph` in-memory + `KuzuDB` on disk) with O(N) call-edge resolution and damped PageRank centrality.
+2. **Runtime Telemetry Overlay:** Maps Chrome DevTools Protocol (CDP V8) CPU/memory profiles and Linux/WSL2 eBPF tracepoints directly onto AST function nodes.
+3. **Graph-Guided Mutation Arena:** Instead of running an entire test suite for 20 minutes, CHRONOS queries `TESTS` edges to execute only the specific tests covering the modified symbol inside isolated parallel sandboxes.
+4. **Explicit Epistemic Contracts:** Every blast-radius report discloses its observation coverage (`complete` vs. `partial`), uncertainty interval (`confidence_interval`), and unresolved dynamic call sites (`residual_unknowns`)—never conflating unobserved edges with zero risk.
+
+---
+
+## Core Architecture: The 4 Pillars
 
 <p align="center">
-  <img src="assets/chronos_architecture.jpg" alt="CHRONOS Architecture Diagram" width="100%" style="border-radius: 12px;"/>
+  <img src="assets/chronos_architecture.svg" alt="CHRONOS-AGENT v1.2 Architecture Schematic" width="100%"/>
 </p>
 
-| Pillar | Focus | Technology &amp; Implementation | Location |
+| Pillar | Responsibility | Implementation | Crate Path |
 | :--- | :--- | :--- | :--- |
-| **1. 4D Knowledge Graph** | AST Topology + Live Metrics | Tree-sitter parser &bull; In-memory `Petgraph` (&lt;15ms query) &bull; Embedded `KuzuDB` persistence | `chronos-core/src/graph/` |
-| **2. Mutation Arena** | Test Quality Gate | 5 safe mutant operators (ConditionFlip, ReturnNull, HttpStatusSwap, OffByOne, BoundaryCondition) &bull; Parallel watchdog isolation | `chronos-core/src/mutation/` |
-| **3. Semantic Contract Broker** | Pre-Tool Execution Gate | 30ms debounced file watcher &bull; Public signature fingerprinting &bull; Real-time breaking change blocker | `chronos-core/src/contract/` |
-| **4. Blast-Radius Heatmap** | Impact Risk Assessment | 3-tier risk classification (Cyan / Amber / Red) &bull; 30-second markdown glance &bull; Interactive HTML visualizer | `chronos-core/src/blast_radius/` |
+| **1. 4D Knowledge Graph** | Multi-language AST topology, PageRank centrality, and live telemetry state | Tree-sitter (`TS` / `Py` / `Rust`) &bull; `Petgraph` (`<15ms` traversal) &bull; Embedded `KuzuDB` node + edge persistence | `chronos-core/src/graph/` |
+| **2. Mutation Arena** | Semantic test verification before code acceptance | 5 deterministic operators (`ConditionFlip`, `ReturnNull`, `HttpStatusSwap`, `OffByOne`, `BoundaryCondition`) &bull; Parallel temp-dir sandboxes with zero-copy `node_modules`/`.venv` junctions | `chronos-core/src/mutation/` |
+| **3. Semantic Contract Broker** | Real-time public signature lock across concurrent agents | 300ms debounced `notify` file watcher &bull; Signature fingerprinting &bull; Breaking-change interception before commit | `chronos-core/src/contract/` |
+| **4. Blast-Radius Engine** | Risk scoring with uncertainty bounds | 3-tier classification (`LOW` / `MEDIUM` / `HIGH`) &bull; `CoverageReport` &amp; `confidence_interval` &bull; Markdown glance &amp; HTML visualizer | `chronos-core/src/blast_radius/` |
 
 ---
 
-## 📊 Capability Matrix &amp; Benchmark
+## Capability Matrix &amp; Benchmark
 
 <p align="center">
-  <img src="assets/chronos_benchmark_radar.jpg" alt="CHRONOS Capability Radar Comparison" width="100%" style="border-radius: 12px;"/>
+  <img src="assets/chronos_benchmark_radar.svg" alt="CHRONOS-AGENT v1.2 Capability Radar Benchmark" width="100%"/>
 </p>
 
-### Feature Comparison
+### Comparison Across Tool Classes
 
-| Capability | Static Linters (ESLint, SonarQube) | Vanilla AI Agents (Copilot, Cursor alone) | **CHRONOS 4D-Agent** |
-| :--- | :---: | :---: | :---: |
-| **AST Topology Depth** | ⚠️ Flat Syntax Rules | ⚠️ Prompt Token Window Only | 🚀 **Full 4D Multi-File Graph** |
-| **Runtime Telemetry** | ❌ No | ❌ No | 🚀 **Live CDP V8 + eBPF Profiling** |
-| **Mutation Testing Gate** | ❌ No | ❌ No | 🚀 **Automated 80%/90% Kill Gate** |
-| **Blast-Radius Protection** | ❌ No | ⚠️ Guesswork | 🚀 **Deterministic 3-Tier Heatmap** |
-| **Pre-Tool Safety Broker** | ❌ No | ❌ No | 🚀 **Zero-Crash Execution Interceptor** |
-| **Graph Persistence** | ❌ No | ❌ No | 🚀 **Embedded KuzuDB Engine** |
-
-### 🏆 State-of-the-Art Unification vs. Existing Tools
-
-CHRONOS-AGENT bridges the gap between disconnected developer tools, combining four specialized paradigms into a single unified living harness:
-
-| Technical Pillar | Existing State-of-the-Art Tools | ⚡ The CHRONOS Breakthrough |
-| :--- | :--- | :--- |
-| **1. Codebase Knowledge Graph** | `codebase-memory-mcp`, `GitNexus`<br>&rarr; *Static AST analysis only; completely blind to runtime memory, CPU bottlenecks, and execution frequency.* | **CHRONOS 4D-Graph:**<br>Embeds live eBPF &amp; V8 runtime telemetry directly into AST symbol nodes, giving LLMs multi-dimensional code insight. |
-| **2. System Telemetry &amp; eBPF** | `ActPlane`, `AgentSight`, `Pixie`<br>&rarr; *Built strictly for DevOps/SecOps monitoring; isolated from code AST structures.* | **CHRONOS Runtime Ingestor:**<br>Directly links kernel-level CPU/RAM/latency metrics to individual functions for autonomous AI refactoring. |
-| **3. Mutation Testing (TDD Gate)** | `StrykerJS`, `Mutmut`, `cargo-mutants`<br>&rarr; *Exceedingly slow (20–30+ minutes); blindly re-runs entire test suites across all mutants.* | **Graph-Guided Mutation:**<br>Evaluates mutants in **&lt;1.5 seconds** by leveraging the graph to run only the 1–2 test cases mapped to the affected call path. |
-| **4. Multi-Agent Synchronization** | `CrewAI`, `AutoGen`, `MetaGPT`, `ECC`<br>&rarr; *Rely on raw prompt messaging or Git commits; prone to silent breaking changes and "Merge Hell".* | **Semantic Contract Broker:**<br>Intercepts AST signature diffs in real-time (&lt;30ms debounce) via shared memory, preventing breaking changes *before* tool commit. |
+| Capability | Static Linters (`ESLint`, `SonarQube`) | Vanilla Coding Agents (`Copilot`, `Cursor` alone) | Static Graph MCPs (`GitNexus`, `codebase-memory`) | **CHRONOS-AGENT v1.2** |
+| :--- | :---: | :---: | :---: | :---: |
+| **Multi-Language Call Graph** | Single-file rules | Token window only | Static AST edges | **AST + Macro `token_tree` + PageRank** |
+| **Runtime Telemetry** | No | No | No | **CDP V8 Profiler + Linux eBPF** |
+| **Mutation Testing Gate** | No | No | No | **Graph-Guided Parallel Sandboxes (`<1.5s`)** |
+| **Uncertainty &amp; Coverage Bounds** | No | No | Unobserved = 0 callers | **`confidence_interval` + `residual_unknowns`** |
+| **Pre-Tool Contract Broker** | No | No | No | **Live Signature Diff Interceptor** |
+| **Persistent Graph Storage** | No | No | External DB or JSON | **Embedded `KuzuDB` (Nodes + 4 Edge Tables)** |
 
 ---
 
-## 🖥️ Developer HUD &amp; VS Code Extension
+## Developer HUD &amp; VS Code Extension
 
 <p align="center">
-  <img src="assets/chronos_radar_dashboard.jpg" alt="CHRONOS Developer HUD Mockup" width="100%" style="border-radius: 12px;"/>
+  <img src="assets/chronos_radar_dashboard.svg" alt="CHRONOS-AGENT v1.2 Developer HUD & Telemetry View" width="100%"/>
 </p>
 
 > [!TIP]
-> **🚀 Now Available on Visual Studio Marketplace:**  
-> You can install the companion extension directly inside VS Code by searching **"CHRONOS Agent"** in the Extensions tab (`Ctrl+Shift+X`), or visit the official [VS Code Marketplace Listing](https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent).
+> **Available on Visual Studio Marketplace:**  
+> Search **"CHRONOS Agent"** in the VS Code Extensions view (`Ctrl+Shift+X`), or install from the [VS Code Marketplace Listing](https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent).
 
-The companion **CHRONOS VS Code Extension** (`chronos-vscode/`) brings the 4D Knowledge Graph directly into your daily editor:
+The companion extension (`chronos-vscode/`) integrates the `chronos-mcp` engine into your editor:
 
-- **On-Save Continuous Telemetry:** Automatically parses and synchronizes symbols to the local graph upon file save (`onDidSaveTextDocument`).
-- **Interactive Blast-Radius HUD:** Visualizes high-impact call dependencies and potential breaking changes directly inside editor webview panels.
-- **Zero-Friction Binary Delivery:** Automatically prompts to download pre-compiled releases or connects seamlessly to your custom local MCP binary.
+- **Continuous Workspace Watcher:** Automatically re-indexes modified `.ts`, `.tsx`, `.js`, `.py`, and `.rs` files on save, rebuilding cross-file call edges, updating `ContractBroker` signatures, and syncing changes to `KuzuDB`.
+- **Blast-Radius &amp; Uncertainty HUD:** Displays each function's composite risk score, $[low, high]$ confidence interval, PageRank centrality, and surviving mutants right inside VS Code.
+- **Zero-Config Binary Discovery:** Connects to your workspace binary or downloads pre-compiled platform releases automatically.
 
 ---
 
-## 🔌 Universal AI Integrations (9 Clients)
+## Universal AI Integrations (9 Clients)
 
-CHRONOS exposes a standardized **Model Context Protocol (MCP v2024-11-05)** server over stdio JSON-RPC 2.0, allowing plug-and-play integration with any major AI client:
+`chronos-mcp` speaks standard **Model Context Protocol (MCP v2024-11-05)** over stdio JSON-RPC 2.0:
 
-| Client | Platform | Configuration File / Directory |
+| Client | Platform | Configuration Path |
 | :--- | :--- | :--- |
 | **Antigravity (Google)** | CLI / IDE | `~/.gemini/antigravity/mcp/` |
 | **Cursor** | IDE | `.cursor/mcp.json` |
@@ -144,141 +132,122 @@ CHRONOS exposes a standardized **Model Context Protocol (MCP v2024-11-05)** serv
 | **Continue** | VS Code / JetBrains | `.continue/config.json` |
 | **Zed** | Editor | `~/.config/zed/settings.json` |
 
+Generate ready-to-paste configuration snippets for any client:
+
 ```bash
-# Print automatic configuration snippets for all supported AI tools:
 chronos mcp --client all
 ```
 
 ---
 
-## 🚀 Quickstart &amp; Installation
+## Quickstart &amp; Installation
 
-### Option 1: Zero-Build Pre-compiled Binaries (Recommended)
+### Option 1: Pre-Compiled Binaries
 
-Download the pre-built binaries for your platform directly from [GitHub Releases](https://github.com/ptai-eng/chronos-agent/releases/tag/v1.0.0):
+Download the latest release archive from [GitHub Releases](https://github.com/ptai-eng/chronos-agent/releases):
 - **Windows (x64):** `chronos-windows-x64.zip` (`chronos.exe` + `chronos-mcp.exe`)
 - **Linux (x64):** `chronos-linux-x64.tar.gz`
-- **macOS (Intel / Apple Silicon):** `chronos-macos-arm64.tar.gz`
-- **VS Code Extension:** `chronos-agent-1.0.0.vsix`
+- **macOS (Apple Silicon):** `chronos-macos-arm64.tar.gz`
+- **VS Code Extension:** `chronos-agent-1.2.0.vsix`
 
 ### Option 2: Build from Source
 
 ```powershell
-# Prerequisites: Rust 1.75+, Node.js 18+
-# On Windows, ensure MSVC Build Tools are in your PATH:
-$env:PATH = "$env:USERPROFILE\.cargo\bin;C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;$env:PATH"
-
-# Clone and compile the workspace:
+# Prerequisites: Rust 1.85+ (2024 Edition), CMake / MSVC Build Tools (for KuzuDB C++ FFI)
 git clone https://github.com/ptai-eng/chronos-agent.git
 cd chronos-agent
 cargo build --release
 
-# Binaries will be generated at:
-# ./target/release/chronos-mcp.exe  (MCP Protocol Server)
-# ./target/release/chronos.exe      (CLI Tool)
+# Compiled binaries:
+# ./target/release/chronos-mcp.exe  (MCP Server)
+# ./target/release/chronos.exe      (CLI Harness)
 ```
 
 ---
 
-## 🛠️ CLI Command Suite
+## CLI Command Suite
 
 ```powershell
-# 1. Full Audit: AST parsing + Blast Radius + Targeted Mutation Gate
-#    Works on .ts .tsx .js .py .rs
+# 1. Full 4-Pillar Audit (AST + Blast Radius + Contract Check + Mutation Gate)
+#    Supports .ts, .tsx, .js, .py, .rs
 chronos audit src/services/orderService.ts
 chronos audit app/routes/users.py
+chronos audit chronos-core/src/graph/schema.rs
 
-# 2. 30-Second Executive Glance:
+# 2. 30-Second Executive Glance (includes confidence interval & coverage report)
 chronos glance src/services/orderService.ts --symbol processOrdersWithUserInfo
 
-# 3. Query 4D Knowledge Graph:
+# 3. Query the 4D Knowledge Graph (telemetry hotspots or PageRank fallback)
 chronos graph src/services/orderService.ts --query hotspots
 chronos graph src/services/orderService.ts --query callers --symbol getOrderWithUser
 
-# 4. Inspect Live Contract Broker Violations:
+# 4. Monitor Real-Time Contract Broker Signatures
 chronos status --watch src/services/
 
-# 5. Output Ready-to-Use AI Client Configs:
-chronos mcp --client cursor
-
-# 6. Git Diff: list functions touched by your changes (new in v1.1)
-chronos diff                          # unstaged changes
-chronos diff --staged                 # staged changes (pre-commit hook)
-chronos diff --commit a1b2c3d         # a single commit
-chronos diff --range main..feature    # a PR range
-chronos diff --staged --json          # machine-readable output for CI
+# 5. Git Diff Blast-Radius & CI Gate (full AST span matching + ImpactAnalyzer)
+chronos diff                          # Unstaged working tree changes
+chronos diff --staged                 # Staged changes (pre-commit hook)
+chronos diff --commit a1b2c3d         # Specific commit
+chronos diff --range main..feature    # Pull request branch range
+chronos diff --staged --json --ci     # Machine-readable JSON; exits 1 on HIGH risk
 ```
 
-The MCP server watches the workspace and keeps the graph in sync as you save files. Disable it with `chronos-mcp --no-watch` in CI.
-
 ---
 
-## 🛡️ Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)
+## Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)
 
 > [!WARNING]
-> **Why static code scanners (such as NVIDIA SkillSpector) flag this project with a "CRITICAL / DO NOT INSTALL" rating:**
+> **Why static heuristic scanners (such as NVIDIA SkillSpector) flag this repository:**
 > 
-> CHRONOS-AGENT is an advanced system-level analysis harness designed to deeply inspect and test software reliability. Because it purposefully leverages low-level privileged APIs, it **intentionally triggers false positives** on static heuristic scanners like NVIDIA SkillSpector (scoring 85/100 risk):
+> `CHRONOS-AGENT` is a system-level code intelligence and runtime profiling harness. Because it intentionally interfaces with privileged debugging and kernel telemetry APIs, static keyword scanners report false-positive risk alerts:
 >
-> 1. **eBPF Kernel Probes (Sudo/Root Execution):** Traces low-level operating system events without performance overhead.
-> 2. **Chrome DevTools Protocol (CDP V8 Hooking):** Connects to active V8 inspector endpoints to capture live runtime telemetry (flagged by scanners as *Exploit Framework* components).
-> 3. **Mutation Testing Watchdog:** Injects AST mutants and executes in-process memory watchdogs to verify test rigor.
-> 4. **Agent Auto-Discovery:** Scans and configures local AI tool settings (`.claude/`, `.cursor/`, `.gemini/`) to automate MCP server registration.
+> 1. **eBPF Kernel Tracepoints (`chronos-core/src/telemetry/ebpf_adapter.rs`):** Attaches Linux kernel/uprobe tracepoints for low-overhead latency profiling.
+> 2. **Chrome DevTools Protocol (`chronos-core/src/telemetry/cdp_client.rs`):** Connects to local V8 inspector WebSockets to sample live CPU and heap allocations.
+> 3. **Subprocess Mutation Runner (`chronos-core/src/mutation/runner.rs`):** Spawns isolated test-runner subprocesses inside temporary sandboxes with timeout watchdogs.
+> 4. **MCP Client Config Generator (`chronos-cli/src/commands/mcp_config.rs`):** Emits configuration templates for `.cursor/`, `.claude/`, and `.gemini/` directories.
 >
-> *These capabilities are core to CHRONOS's mission. We encourage security researchers to audit our open-source Rust implementation.*
+> Every MCP tool enforces canonical workspace path validation (`validate_path_within_workspace`), parameterized KuzuDB queries, and `_meta.provenance.untrusted_content` tagging.
 
 ---
 
-## 🧪 Verification &amp; Test Matrix
+## Verification &amp; Test Matrix
 
 ```text
 ===============================================================================
-CHRONOS-AGENT VERIFICATION SUITE (v1.1.0)
+CHRONOS-AGENT VERIFICATION SUITE (v1.2.0)
 ===============================================================================
-chronos-core unit tests:         73/73  PASS  [Graph, AST (TS/Py/Rust), Telemetry,
-                                               Mutation, Sandbox]
-chronos-core integration tests:   6/6   PASS  [End-to-End 4 Pillars]
-chronos-core KuzuDB tests:        8/8   PASS  [Persistent Graph Storage]
-chronos-cli unit tests:           4/4   PASS  [Git diff hunk + symbol parsing]
+chronos-core unit tests:         73/73  PASS  [Graph, AST (TS/Py/Rust + macros),
+                                               PageRank, Telemetry, Mutation,
+                                               Zero-Copy Sandbox Junctions]
+chronos-core integration tests:   8/8   PASS  [End-to-End 4 Pillars + Multi-Lang
+                                               Call/Test Ingestion & Uncertainty]
+chronos-core KuzuDB tests:        9/9   PASS  [Persistent Nodes + 4 Edge Tables]
+chronos-cli unit tests:           4/4   PASS  [Git Diff Hunk + Full AST Span Risk]
 -------------------------------------------------------------------------------
-TOTAL:                           91/91  PASS
+TOTAL:                           94/94  PASS  (0 failed, 0 compiler warnings)
 ===============================================================================
 ```
 
-Reproduce with `cargo test --workspace`.
+Run the full verification suite locally:
+
+```bash
+cargo test --workspace
+```
 
 ---
 
-## 🗺️ Roadmap &amp; Milestones
+## Roadmap &amp; Milestones
 
-- [x] **Phase 0:** Cargo Workspace &amp; Scaffolding (Core, MCP, CLI)
-- [x] **Phase 1:** 4D Knowledge Graph (Tree-sitter AST + Petgraph)
-- [x] **Phase 2:** Runtime Telemetry Engine (CDP V8 Profiler)
-- [x] **Phase 3:** Mutation Arena (80%/90% Kill Gate + In-process Watchdogs)
-- [x] **Phase 4:** Semantic Contract Broker &amp; 3-Tier Blast-Radius Matrix
-- [x] **Phase 6:** Universal MCP Server (5 Tools, 9 AI Clients)
-- [x] **Phase 7:** CLI Command Suite (`audit`, `glance`, `graph`, `mcp`, `status`)
-- [x] **Phase 8:** Comprehensive Integration Verification (79/79 Tests Passing)
-- [x] **Phase v2.1:** Embedded KuzuDB Persistent Graph Storage
-- [x] **Phase v2.2:** GitHub Actions Multi-Platform Release Pipeline (Windows, Linux, macOS)
-- [x] **Phase v2.3:** Interactive VS Code Extension Published to Marketplace
-- [x] **Phase v2.4:** eBPF Low-Overhead Kernel Telemetry (Linux/WSL2)
-- [x] **v1.1 — Security hardening:** path-traversal guard, NaN-safe sorting, O(N) call-edge resolution
-- [x] **v1.1 — Parallel Mutation Runner:** sandboxed temp-dir isolation with bounded concurrency
-- [x] **v1.1 — Multi-language AST:** Python (Flask/FastAPI) and Rust parsers behind a single dispatcher
-- [x] **v1.1 — Real-time File Watcher:** debounced auto-sync of changed files into the graph
-- [x] **v1.1 — `chronos diff`:** git-aware changed-symbol detection with Markdown/JSON output
-- [ ] **Next:** risk scoring in `chronos diff` so `--ci` can block high-risk merges
-- [ ] **Next:** watcher rebuilds call edges, persists to KuzuDB, drops deleted files
-- [ ] **Next:** `chronos_watcher_status` MCP tool
-- [ ] **Next:** benchmark parallel mutation on a real Jest project
+- [x] **Phase 0–4:** Cargo Workspace, 4D Knowledge Graph (`Petgraph`), CDP V8 Profiler, Mutation Arena, Contract Broker &amp; Blast-Radius Engine
+- [x] **Phase 6–8:** Universal MCP Server (5 Tools, 9 AI Clients), CLI Suite, Integration Suite
+- [x] **v1.0:** Embedded `KuzuDB` Storage, Cross-Platform Release CI, VS Code Marketplace Extension, Linux eBPF Adapter
+- [x] **v1.1:** Workspace Path-Traversal Hardening, Parallel Sandboxed Mutation Runner, Python/Rust AST Parsers, Debounced File Watcher, `chronos diff`
+- [x] **v1.2:** Multi-Language Call/Test Edge Extraction (`TS`/`Py`/`Rust` + macro `token_tree`), Full KuzuDB Edge Persistence (`CALLS`/`CONTAINS`/`TESTS`/`IMPORTS`), PageRank Centrality + Uncertainty Intervals (`CoverageReport` &amp; `residual_unknowns`), Real `chronos diff --ci` Risk Gate, Zero-Copy Sandbox Dependency Junctions
+- [ ] **v1.3 (Planned):** `chronos_watcher_status` MCP diagnostic tool &amp; incremental Tree-sitter edit trees
+- [ ] **v1.3 (Planned):** Cross-file module import path canonicalization (`tsconfig.json` paths / Python package roots)
 
 ---
 
-## 📄 License &amp; Community
+## License
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
-<p align="center">
-  <sub>Engineered with ❤️ for next-generation autonomous software development.</sub>
-</p>
+Distributed under the **MIT License**. See `LICENSE` for details.

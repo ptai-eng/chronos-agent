@@ -32,7 +32,7 @@ pub struct ImportRef {
     pub source_module: String,
 }
 
-/// All symbols and relationships extracted from a single TypeScript file
+/// All symbols and relationships extracted from a single source file
 #[derive(Debug)]
 pub struct ParsedModule {
     pub file_path: PathBuf,
@@ -42,6 +42,8 @@ pub struct ParsedModule {
     pub test_cases: Vec<ChronosNode>,
     pub call_refs: Vec<CallRef>,
     pub import_refs: Vec<ImportRef>,
+    /// Number of dynamic/computed call sites whose target could not be statically named
+    pub unresolved_call_sites: usize,
     /// Total non-blank, non-comment lines (for complexity scoring)
     pub sloc: usize,
 }
@@ -56,6 +58,7 @@ impl ParsedModule {
             test_cases: vec![],
             call_refs: vec![],
             import_refs: vec![],
+            unresolved_call_sites: 0,
             sloc: 0,
         }
     }
@@ -110,16 +113,17 @@ impl TypeScriptParser {
         let source_bytes = source.as_bytes();
 
         // Walk the AST and extract symbols
-        self.extract_symbols(root_node, source_bytes, &mut module, file_path, None);
+        self.extract_symbols(root_node, source_bytes, &mut module, file_path, None, None);
 
         debug!(
-            "Parsed {}: {} functions, {} classes, {} routes, {} tests, {} calls",
+            "Parsed {}: {} functions, {} classes, {} routes, {} tests, {} calls ({} unresolved)",
             file_path.display(),
             module.functions.len(),
             module.classes.len(),
             module.api_routes.len(),
             module.test_cases.len(),
             module.call_refs.len(),
+            module.unresolved_call_sites,
         );
 
         Ok(module)
@@ -132,15 +136,18 @@ impl TypeScriptParser {
         module: &mut ParsedModule,
         file_path: &Path,
         current_class: Option<&str>,
+        current_function: Option<&str>,
     ) {
         match node.kind() {
             // function foo() {} / async function foo() {}
             "function_declaration" => {
+                let mut fn_scope = current_function.map(|s| s.to_string());
                 if let Some(fn_node) = self.extract_function(node, source, file_path, current_class) {
+                    fn_scope = Some(fn_node.name.clone());
                     module.functions.push(fn_node);
                 }
-                // Still recurse to catch nested functions
-                self.recurse_children(node, source, module, file_path, current_class);
+                // Recurse with updated current_function scope
+                self.recurse_children(node, source, module, file_path, current_class, fn_scope.as_deref());
             }
 
             // class Foo { ... }
@@ -150,27 +157,34 @@ impl TypeScriptParser {
                     module.classes.push(class_node);
                 }
                 // Recurse into class body to extract methods
-                self.recurse_children(node, source, module, file_path, Some(class_name).as_deref());
+                self.recurse_children(node, source, module, file_path, Some(class_name.as_str()), current_function);
             }
 
             // const foo = () => {} or const foo = function() {}
             "lexical_declaration" | "variable_declaration" => {
-                self.extract_variable_declarations(node, source, module, file_path, current_class);
-                self.recurse_children(node, source, module, file_path, current_class);
+                let declared_fn = self.extract_variable_declarations(node, source, module, file_path, current_class);
+                let next_fn = declared_fn.as_deref().or(current_function);
+                self.recurse_children(node, source, module, file_path, current_class, next_fn);
             }
 
             // class method definitions
             "method_definition" => {
+                let mut fn_scope = current_function.map(|s| s.to_string());
                 if let Some(fn_node) = self.extract_method(node, source, file_path, current_class) {
+                    fn_scope = Some(fn_node.name.clone());
                     module.functions.push(fn_node);
                 }
-                self.recurse_children(node, source, module, file_path, current_class);
+                self.recurse_children(node, source, module, file_path, current_class, fn_scope.as_deref());
             }
 
             // Call expressions: foo(), obj.method(), app.get('/path', handler)
             "call_expression" => {
-                self.extract_call(node, source, module, file_path, current_class);
-                self.recurse_children(node, source, module, file_path, current_class);
+                let test_scope = self.try_extract_test_scope(node, source);
+                let active_fn = test_scope.as_deref().or(current_function);
+                if test_scope.is_none() {
+                    self.extract_call(node, source, module, file_path, active_fn);
+                }
+                self.recurse_children(node, source, module, file_path, current_class, active_fn);
             }
 
             // import { foo } from './bar'
@@ -183,11 +197,11 @@ impl TypeScriptParser {
             // describe('...', () => { it('...', () => { ... }) })
             "expression_statement" => {
                 self.extract_test_blocks(node, source, module, file_path);
-                self.recurse_children(node, source, module, file_path, current_class);
+                self.recurse_children(node, source, module, file_path, current_class, current_function);
             }
 
             _ => {
-                self.recurse_children(node, source, module, file_path, current_class);
+                self.recurse_children(node, source, module, file_path, current_class, current_function);
             }
         }
     }
@@ -199,10 +213,11 @@ impl TypeScriptParser {
         module: &mut ParsedModule,
         file_path: &Path,
         current_class: Option<&str>,
+        current_function: Option<&str>,
     ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            self.extract_symbols(child, source, module, file_path, current_class);
+            self.extract_symbols(child, source, module, file_path, current_class, current_function);
         }
     }
 
@@ -278,7 +293,8 @@ impl TypeScriptParser {
         module: &mut ParsedModule,
         file_path: &Path,
         current_class: Option<&str>,
-    ) {
+    ) -> Option<String> {
+        let mut declared_name = None;
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_declarator" {
@@ -305,12 +321,38 @@ impl TypeScriptParser {
                             );
                             fn_node.heuristics = compute_function_heuristics(val_n, source);
                             module.functions.push(fn_node);
+                            declared_name = Some(name);
                         }
                         _ => {}
                     }
                 }
             }
         }
+        declared_name
+    }
+
+    fn try_extract_test_scope(
+        &self,
+        node: tree_sitter::Node,
+        source: &[u8],
+    ) -> Option<String> {
+        let fn_node = node.child_by_field_name("function")?;
+        let fn_name = node_text(fn_node, source);
+        if matches!(fn_name.as_str(), "it" | "test" | "describe") {
+            let args_node = node.child_by_field_name("arguments")?;
+            let mut arg_cursor = args_node.walk();
+            for arg in args_node.children(&mut arg_cursor) {
+                if matches!(arg.kind(), "string" | "template_string") {
+                    let test_label = node_text(arg, source)
+                        .trim_matches('"')
+                        .trim_matches('\'')
+                        .trim_matches('`')
+                        .to_string();
+                    return Some(format!("{}({})", fn_name, test_label));
+                }
+            }
+        }
+        None
     }
 
     fn extract_call(
@@ -321,8 +363,6 @@ impl TypeScriptParser {
         file_path: &Path,
         current_function: Option<&str>,
     ) {
-        let _fn_text = node_text(node, source);
-
         // Detect Express.js routes: app.get(...), router.post(...), etc.
         if let Some(route_node) = try_extract_express_route(node, source, file_path) {
             module.api_routes.push(route_node);
@@ -332,9 +372,29 @@ impl TypeScriptParser {
         // Extract callee name for call graph edges
         let function_node = node.child_by_field_name("function");
         if let Some(fn_node) = function_node {
-            let callee_name = node_text(fn_node, source);
+            // Dynamic / computed call sites (subscript_expression, parenthesized_expression, etc.)
+            if matches!(
+                fn_node.kind(),
+                "subscript_expression" | "parenthesized_expression" | "call_expression"
+            ) {
+                module.unresolved_call_sites += 1;
+                return;
+            }
+
+            let raw_callee = node_text(fn_node, source);
+            let callee_name = raw_callee
+                .rsplit('.')
+                .next()
+                .unwrap_or(&raw_callee)
+                .trim()
+                .to_string();
+
+            if matches!(callee_name.as_str(), "apply" | "call" | "bind" | "eval") {
+                module.unresolved_call_sites += 1;
+            }
+
             // Only record meaningful function calls (not built-ins, not too long)
-            if callee_name.len() < 100 && !callee_name.contains('\n') {
+            if !callee_name.is_empty() && callee_name.len() < 100 && !callee_name.contains('\n') {
                 if let Some(caller) = current_function {
                     module.call_refs.push(CallRef {
                         caller_name: caller.to_string(),

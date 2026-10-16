@@ -5,10 +5,7 @@
 
 use crate::protocol::CallToolResult;
 use crate::state::SharedState;
-use chronos_core::{
-    ast::dispatcher::LanguageDispatcher,
-    graph::schema::{ChronosEdge, EdgeKind},
-};
+use chronos_core::ast::dispatcher::LanguageDispatcher;
 use serde_json::Value;
 use std::path::PathBuf;
 use tracing::warn;
@@ -69,42 +66,10 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
     let test_count = parsed.test_cases.len();
     let call_ref_count = parsed.call_refs.len();
     let import_count = parsed.import_refs.len();
-    // Collect all nodes upfront to avoid double-borrow of `parsed`
-    let all_nodes: Vec<chronos_core::graph::schema::ChronosNode> =
-        parsed.all_nodes().into_iter().cloned().collect();
-    let _total_symbols = all_nodes.len();
+    let unresolved_count = parsed.unresolved_call_sites;
 
     let mut st = state.write().await;
-    let mut inserted = 0usize;
-    let mut edges_added = 0usize;
-
-    // Bulk insert all nodes (functions, classes, routes, test cases)
-    for node in &all_nodes {
-        st.graph.add_node(node.clone());
-        inserted += 1;
-    }
-
-    // Performance fix: pre-build name→id lookup map BEFORE the loop (O(N) instead of O(N×M))
-    use chronos_core::graph::schema::NodeKind;
-    use std::collections::HashMap;
-    let name_to_id: HashMap<String, chronos_core::graph::schema::NodeId> = st.graph
-        .nodes_by_kind(&NodeKind::Function)
-        .into_iter()
-        .chain(st.graph.nodes_by_kind(&NodeKind::Class).into_iter())
-        .map(|n| (n.name.clone(), n.id.clone()))
-        .collect();
-
-    // Insert call reference edges (A calls B) — now O(N) with HashMap lookup
-    for call_ref in &parsed.call_refs {
-        let caller_id = name_to_id.get(&call_ref.caller_name).cloned();
-        let callee_id = name_to_id.get(&call_ref.callee_name).cloned();
-
-        if let (Some(caller), Some(callee)) = (caller_id, callee_id) {
-            if st.graph.add_edge(&caller, &callee, ChronosEdge::new(EdgeKind::Calls)).is_ok() {
-                edges_added += 1;
-            }
-        }
-    }
+    let (inserted, edges_added) = st.graph.ingest_parsed_module(&parsed);
 
     if let Some(ref db) = st.db {
         if let Err(e) = db.sync_from_graph(&st.graph) {
@@ -113,7 +78,6 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
     }
 
     let broker = st.broker.clone();
-    
     let report = st.graph.status_report();
 
     // Drop lock before await
@@ -133,20 +97,32 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
   - Classes: {class_count}
   - API routes: {route_count}
   - Test cases: {test_count}
-  - Call references: {call_ref_count}
+  - Call references: {call_ref_count} (unresolved dynamic sites: {unresolved_count})
   - Import references: {import_count}
 
 **Graph state:**
   - Total nodes: {} (functions: {}, tests: {})
+  - Total edges: {} (resolved calls: {}, unresolved: {})
   - New nodes inserted: {inserted}
-  - New call edges added: {edges_added}
+  - New edges linked: {edges_added}
   - Hydrated: {}/{} nodes
 
+**Provenance & Coverage (`_meta`):**
+  - `_meta.provenance.untrusted_content`: `true` (parsed from external source AST)
+  - `coverage.call_edges_available`: `{}`
+
 Next steps:
-- `chronos_query_hotspots` → performance bottlenecks
-- `chronos_blast_radius` {{ symbol_name: "functionName" }} → change impact
+- `chronos_query_hotspots` → performance & PageRank bottlenecks
+- `chronos_blast_radius` {{ symbol_name: "functionName", detail: "summary" }} → change impact
 - `chronos_contract_status` → check for breaking change alerts"#,
-        report.total_nodes, report.function_nodes, report.test_nodes,
-        report.hydrated_nodes, report.total_nodes,
+        report.total_nodes,
+        report.function_nodes,
+        report.test_nodes,
+        report.total_edges,
+        report.resolved_calls,
+        report.unresolved_calls,
+        report.hydrated_nodes,
+        report.total_nodes,
+        report.total_edges > 0,
     ))
 }

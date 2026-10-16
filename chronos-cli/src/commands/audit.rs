@@ -32,17 +32,16 @@ pub async fn run(
     let parsed = dispatcher.parse_file(&abs_file)?;
 
     let mut graph = ChronosGraph::new();
-    for node in parsed.all_nodes() {
-        graph.add_node(node.clone());
-    }
+    let (_inserted, edges_added) = graph.ingest_parsed_module(&parsed);
 
     let report = graph.status_report();
     println!(
-        "   ✓ {} nodes (functions: {}, tests: {}, routes: {})",
+        "   ✓ {} nodes (functions: {}, tests: {}, routes: {}, edges: {})",
         report.total_nodes,
         report.function_nodes,
         report.test_nodes,
         graph.nodes_by_kind(&NodeKind::ApiRoute).len(),
+        edges_added,
     );
 
     // ── Step 2: Blast-Radius ──────────────────────────────────────

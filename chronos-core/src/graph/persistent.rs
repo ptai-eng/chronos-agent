@@ -201,7 +201,45 @@ impl PersistentGraph {
         Ok(())
     }
 
-    /// Bulk sync all nodes from the in-memory graph → KuzuDB.
+    /// Upsert a directed edge between two nodes in KuzuDB.
+    pub fn upsert_edge(
+        &self,
+        conn: &Connection,
+        from: &NodeId,
+        to: &NodeId,
+        edge: &crate::graph::schema::ChronosEdge,
+    ) -> Result<()> {
+        let rel_label = match edge.kind {
+            crate::graph::schema::EdgeKind::Calls => "CALLS",
+            crate::graph::schema::EdgeKind::Contains | crate::graph::schema::EdgeKind::Exposes => {
+                "CONTAINS"
+            }
+            crate::graph::schema::EdgeKind::Tests => "TESTS",
+            crate::graph::schema::EdgeKind::Imports | crate::graph::schema::EdgeKind::Implements => {
+                "IMPORTS"
+            }
+        };
+
+        let query = format!(
+            "MATCH (a:ChronosNode {{id: $from_id}}), (b:ChronosNode {{id: $to_id}}) \
+             MERGE (a)-[:{rel_label}]->(b)"
+        );
+
+        let mut stmt = conn
+            .prepare(&query)
+            .map_err(|e| anyhow::anyhow!("Failed to prepare edge upsert ({rel_label}): {e}"))?;
+
+        let params = vec![
+            ("from_id", kuzu::Value::String(from.0.clone())),
+            ("to_id", kuzu::Value::String(to.0.clone())),
+        ];
+
+        conn.execute(&mut stmt, params)
+            .map_err(|e| anyhow::anyhow!("KuzuDB edge upsert failed ({from} -> {to}): {e}"))?;
+        Ok(())
+    }
+
+    /// Bulk sync all nodes AND edges from the in-memory graph → KuzuDB.
     /// Called after every `analyze_file` to keep the DB current.
     pub fn sync_from_graph(&self, graph: &ChronosGraph) -> Result<usize> {
         let conn = Connection::new(&self.db)
@@ -221,11 +259,18 @@ impl PersistentGraph {
                 count += 1;
             }
         }
-        info!("Synced {} nodes to KuzuDB", count);
+
+        let mut edge_count = 0usize;
+        for (src, dst, edge) in graph.all_edges() {
+            self.upsert_edge(&conn, &src, &dst, &edge)?;
+            edge_count += 1;
+        }
+
+        info!("Synced {} nodes and {} edges to KuzuDB", count, edge_count);
         Ok(count)
     }
 
-    /// Load all persisted nodes from KuzuDB back into the in-memory graph.
+    /// Load all persisted nodes and edges from KuzuDB back into the in-memory graph.
     /// Called once at MCP server startup to restore previous sessions.
     ///
     /// # Returns
@@ -324,7 +369,47 @@ impl PersistentGraph {
             count += 1;
         }
 
-        info!("Restored {} nodes from KuzuDB into memory graph", count);
+        // Restore all persisted relationship tables back into the in-memory graph
+        let rel_mappings = [
+            ("CALLS", crate::graph::schema::EdgeKind::Calls),
+            ("CONTAINS", crate::graph::schema::EdgeKind::Contains),
+            ("TESTS", crate::graph::schema::EdgeKind::Tests),
+            ("IMPORTS", crate::graph::schema::EdgeKind::Imports),
+        ];
+
+        let mut restored_edges = 0usize;
+        for (rel_label, edge_kind) in rel_mappings {
+            let cypher = format!(
+                "MATCH (a:ChronosNode)-[:{rel_label}]->(b:ChronosNode) RETURN a.id, b.id"
+            );
+            if let Ok(mut edge_res) = conn.query(&cypher) {
+                while let Some(row) = edge_res.next() {
+                    let from_str = get_string(&row, 0).unwrap_or_default();
+                    let to_str = get_string(&row, 1).unwrap_or_default();
+                    if !from_str.is_empty() && !to_str.is_empty() {
+                        let edge = crate::graph::schema::ChronosEdge {
+                            kind: edge_kind.clone(),
+                            call_site_line: None,
+                            coverage_traced: matches!(edge_kind, crate::graph::schema::EdgeKind::Tests),
+                        };
+                        if graph
+                            .add_edge(&NodeId(from_str), &NodeId(to_str), edge)
+                            .is_ok()
+                        {
+                            restored_edges += 1;
+                            if matches!(edge_kind, crate::graph::schema::EdgeKind::Calls) {
+                                graph.resolved_call_sites += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        info!(
+            "Restored {} nodes and {} edges from KuzuDB into memory graph",
+            count, restored_edges
+        );
         Ok(count)
     }
 
