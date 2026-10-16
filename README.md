@@ -31,8 +31,6 @@
 - [Quickstart &amp; Installation](#quickstart--installation)
 - [CLI Command Suite](#cli-command-suite)
 - [Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)](#security--privacy-notice-nvidia-skillspector-alert)
-- [Verification &amp; Test Matrix](#verification--test-matrix)
-- [Roadmap &amp; Milestones](#roadmap--milestones)
 
 ---
 
@@ -207,44 +205,6 @@ chronos diff --staged --json --ci     # Machine-readable JSON; exits 1 on HIGH r
 > 4. **MCP Client Config Generator (`chronos-cli/src/commands/mcp_config.rs`):** Emits configuration templates for `.cursor/`, `.claude/`, and `.gemini/` directories.
 >
 > Every MCP tool enforces canonical workspace path validation (`validate_path_within_workspace`), parameterized KuzuDB queries, and `_meta.provenance.untrusted_content` tagging.
-
----
-
-## Verification &amp; Test Matrix
-
-```text
-===============================================================================
-CHRONOS-AGENT VERIFICATION SUITE (v1.2.0)
-===============================================================================
-chronos-core unit tests:         73/73  PASS  [Graph, AST (TS/Py/Rust + macros),
-                                               PageRank, Telemetry, Mutation,
-                                               Zero-Copy Sandbox Junctions]
-chronos-core integration tests:   8/8   PASS  [End-to-End 4 Pillars + Multi-Lang
-                                               Call/Test Ingestion & Uncertainty]
-chronos-core KuzuDB tests:        9/9   PASS  [Persistent Nodes + 4 Edge Tables]
-chronos-cli unit tests:           4/4   PASS  [Git Diff Hunk + Full AST Span Risk]
--------------------------------------------------------------------------------
-TOTAL:                           94/94  PASS  (0 failed, 0 compiler warnings)
-===============================================================================
-```
-
-Run the full verification suite locally:
-
-```bash
-cargo test --workspace
-```
-
----
-
-## Roadmap &amp; Milestones
-
-- [x] **Phase 0–4:** Cargo Workspace, 4D Knowledge Graph (`Petgraph`), CDP V8 Profiler, Mutation Arena, Contract Broker &amp; Blast-Radius Engine
-- [x] **Phase 6–8:** Universal MCP Server (5 Tools, 9 AI Clients), CLI Suite, Integration Suite
-- [x] **v1.0:** Embedded `KuzuDB` Storage, Cross-Platform Release CI, VS Code Marketplace Extension, Linux eBPF Adapter
-- [x] **v1.1:** Workspace Path-Traversal Hardening, Parallel Sandboxed Mutation Runner, Python/Rust AST Parsers, Debounced File Watcher, `chronos diff`
-- [x] **v1.2:** Multi-Language Call/Test Edge Extraction (`TS`/`Py`/`Rust` + macro `token_tree`), Full KuzuDB Edge Persistence (`CALLS`/`CONTAINS`/`TESTS`/`IMPORTS`), PageRank Centrality + Uncertainty Intervals (`CoverageReport` &amp; `residual_unknowns`), Real `chronos diff --ci` Risk Gate, Zero-Copy Sandbox Dependency Junctions
-- [ ] **v1.3 (Planned):** `chronos_watcher_status` MCP diagnostic tool &amp; incremental Tree-sitter edit trees
-- [ ] **v1.3 (Planned):** Cross-file module import path canonicalization (`tsconfig.json` paths / Python package roots)
 
 ---
 
