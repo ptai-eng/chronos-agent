@@ -12,6 +12,7 @@
   <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/Version-1.3.0-111827?style=flat-square" alt="Version 1.3.0"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-2024%20Edition-EB6C36?style=flat-square&logo=rust&logoColor=white" alt="Rust Version"></a>
+  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-101%2F101%20Passing-1A7F5A?style=flat-square" alt="Tests 101/101 Passing"></a>
   <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-9%20Tools%20%28v2024--11--05%29-2E5AA8?style=flat-square" alt="MCP Protocol"></a>
   <a href="./integrations/INTEGRATIONS.md"><img src="https://img.shields.io/badge/AI%20Clients-9%20Supported-4B5563?style=flat-square" alt="AI Clients"></a>
   <a href="#-security--privacy-notice-nvidia-skillspector-alert"><img src="https://img.shields.io/badge/Security-SkillSpector%20Audited-B42318?style=flat-square" alt="Security Notice"></a>
@@ -26,7 +27,7 @@
 - [Core Architecture: The 4 Pillars](#core-architecture-the-4-pillars)
 - [Capability Matrix &amp; Benchmark](#capability-matrix--benchmark)
 - [Developer HUD &amp; VS Code Extension](#developer-hud--vs-code-extension)
-- [Universal AI Integrations (9 Clients)](#universal-ai-integrations-9-clients)
+- [Universal AI Integrations (9 Clients &amp; 9 MCP Tools)](#universal-ai-integrations-9-clients--9-mcp-tools)
 - [Quickstart &amp; Installation](#quickstart--installation)
 - [CLI Command Suite](#cli-command-suite)
 - [Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)](#security--privacy-notice-nvidia-skillspector-alert)
@@ -35,16 +36,39 @@
 
 ## What's New in v1.3.0
 
-`v1.3.0` unifies static graph discovery (`codebase-memory` style Cypher, BM25 search, and community clustering) with CHRONOS's 4D runtime telemetry, PageRank uncertainty bounds, and isolated mutation gating:
+`v1.3.0` combines static graph discovery (OpenCypher queries, BM25 identifier search, verbatim code snippets, and Label Propagation community clustering) with CHRONOS's 4D runtime telemetry, PageRank uncertainty bounds, and isolated mutation gating:
 
 | Subsystem | v1.3.0 Upgrade |
 | :--- | :--- |
-| **Polyglot Tree-Sitter Engine (7 Languages)** | Expanded `LanguageDispatcher` from 3 to **7 language families**: **TypeScript/JS**, **Python**, **Rust**, **Go**, **C**, **C++**, and **Java** with unified `CALLS`, `TESTS`, `CONTAINS`, and `IMPORTS` edge extraction. |
-| **Hidden $O(N^2)$ &amp; Loop Complexity Signals** | Every function node computes `loop_count`, `loop_depth`, interprocedural `transitive_loop_depth` (propagated across `CALLS` edges), `linear_scan_in_loop` (`.find`/`.contains`/`.indexOf`/`in ` inside loops), `alloc_in_loop`, and direct/mutual `is_recursive`. |
-| **Read-Only Cypher Engine (`chronos_query_graph`)** | Exposes arbitrary read-only OpenCypher queries (`MATCH`, `WHERE`, `RETURN`, `ORDER BY`, `COUNT`) directly over embedded `KuzuDB`, guarded by `validate_readonly_cypher()` to block mutating or file-I/O statements. |
-| **BM25 Search &amp; Verbatim Snippets (`chronos_search_graph`, `chronos_get_snippet`)** | Sub-millisecond BM25 search with `camelCase`/`snake_case` identifier tokenization, regex filters, degree/loop-depth thresholds, and exact `start_line..=end_line` source code extraction enriched with callers, callees, and covering tests. |
-| **Community Architecture Clustering (`chronos_get_architecture`)** | Deterministic Label Propagation community detection over `Petgraph`, reporting per-cluster Cohesion/Coupling ratios, language breakdown, entry points, top PageRank hubs, and hidden $O(N^2)$ hotspot candidates. |
+| **Polyglot Tree-Sitter Engine (7 Languages)** | Expanded `LanguageDispatcher` from 3 to **7 language families**: **TypeScript/JS**, **Python**, **Rust**, **Go**, **C**, **C++**, and **Java** with unified `CALLS`, `TESTS` (Go `Test*`/`Benchmark*`/`Fuzz*`, C++ GoogleTest `TEST`/`TEST_F`, Java JUnit `@Test`), `CONTAINS`, and `IMPORTS` edge extraction. |
+| **Interprocedural $O(N^2)$ &amp; Loop Complexity Signals** | Every function node computes `loop_count`, `loop_depth`, interprocedural `transitive_loop_depth` (propagated across `CALLS` edges to catch hidden cross-function nested loops), `linear_scan_in_loop` (`.find`/`.contains`/`.indexOf`/`in ` inside loops), `alloc_in_loop`, and direct/mutual `is_recursive`. |
+| **Read-Only Cypher Engine (`chronos_query_graph` / `chronos query`)** | Exposes arbitrary read-only OpenCypher queries (`MATCH`, `WHERE`, `RETURN`, `ORDER BY`, `COUNT`) directly over embedded `KuzuDB`, guarded by `validate_readonly_cypher()` to block mutating or file-I/O statements (`CREATE`, `MERGE`, `SET`, `DELETE`, `DROP`, `COPY`, `LOAD`). |
+| **BM25 Search &amp; Verbatim Snippets (`chronos_search_graph`, `chronos_get_snippet`)** | Sub-millisecond BM25 search with `camelCase`/`snake_case` identifier tokenization, prefix matching, multi-term coverage boosting, regex filters, and exact `start_line..=end_line` source code extraction enriched with callers, callees, and covering tests. |
+| **Community Architecture Clustering (`chronos_get_architecture` / `chronos arch`)** | Deterministic Label Propagation community detection over `Petgraph`, reporting per-cluster Cohesion/Coupling ratios, language breakdown, entry points, top PageRank hubs, and hidden $O(N^2)$ hotspot candidates. |
 | **9 Standardized MCP Tools** | Expanded from 5 to **9 MCP tools** (`chronos_analyze_file`, `chronos_get_blast_radius`, `chronos_run_mutation_gate`, `chronos_query_hotspots`, `chronos_contract_status`, `chronos_query_graph`, `chronos_search_graph`, `chronos_get_snippet`, `chronos_get_architecture`), all enforcing `_meta.provenance.untrusted_content = true`. |
+
+### Example: Finding Hidden Cross-Function $O(N^2)$ Hotspots with Cypher
+
+Because `v1.3.0` propagates `transitive_loop_depth` across `CALLS` edges and persists complexity metrics into `KuzuDB`, agents can query for functions that look harmless locally (`loop_depth <= 1`) but trigger nested loops transitively (`transitive_loop_depth >= 2`):
+
+```cypher
+MATCH (caller:ChronosNode)-[:CALLS]->(callee:ChronosNode)
+WHERE caller.transitive_loop_depth >= 2 OR callee.linear_scan_in_loop > 0
+RETURN caller.name, caller.loop_depth, caller.transitive_loop_depth, callee.name, callee.linear_scan_in_loop
+ORDER BY caller.transitive_loop_depth DESC
+LIMIT 10
+```
+
+<details>
+<summary><strong>Previous Release Highlights (v1.2.0)</strong></summary>
+
+- **Multi-Language Call & Test Edges:** Caller-to-callee (`CALLS`) and test-to-function (`TESTS`) extraction across TypeScript/JS, Python, and Rust (including Rust macro `token_tree` blocks).
+- **Full KuzuDB Edge Persistence:** Persists and reloads all four relationship tables (`CALLS`, `CONTAINS`, `TESTS`, `IMPORTS`) alongside `ChronosNode` symbols.
+- **PageRank & Uncertainty Propagation:** 20-iteration damped PageRank ($\alpha = 0.85$) with explicit $[low, high]$ `confidence_interval`, `coverage` completeness, and `residual_unknowns`.
+- **Real `chronos diff --ci` Risk Gate:** Matches Git diff hunks against full AST function spans and exits non-zero on `HIGH`/`CRITICAL` risk under `--ci`.
+- **Zero-Copy Dependency Sandboxes:** Links `node_modules`, `.venv`, and `venv` via symbolic links or Windows Directory Junctions (`mklink /J`) inside isolated mutation worker directories.
+
+</details>
 
 ---
 
@@ -64,7 +88,7 @@ AI coding agents read source files as flat text buffers. When an agent edits a u
 ## Core Architecture: The 4 Pillars
 
 <p align="center">
-  <img src="assets/chronos_architecture.svg" alt="CHRONOS-AGENT Architecture Schematic" width="100%"/>
+  <img src="assets/chronos_architecture.svg" alt="CHRONOS-AGENT v1.3 Architecture Schematic" width="100%"/>
 </p>
 
 | Pillar | Responsibility | Implementation | Crate Path |
@@ -79,7 +103,7 @@ AI coding agents read source files as flat text buffers. When an agent edits a u
 ## Capability Matrix &amp; Benchmark
 
 <p align="center">
-  <img src="assets/chronos_benchmark_radar.svg" alt="CHRONOS-AGENT Capability Radar Benchmark" width="100%"/>
+  <img src="assets/chronos_benchmark_radar.svg" alt="CHRONOS-AGENT v1.3 Capability Radar Benchmark" width="100%"/>
 </p>
 
 ### Comparison Across Tool Classes
@@ -99,7 +123,7 @@ AI coding agents read source files as flat text buffers. When an agent edits a u
 ## Developer HUD &amp; VS Code Extension
 
 <p align="center">
-  <img src="assets/chronos_radar_dashboard.svg" alt="CHRONOS-AGENT Developer HUD & Telemetry View" width="100%"/>
+  <img src="assets/chronos_radar_dashboard.svg" alt="CHRONOS-AGENT v1.3 Developer HUD & Telemetry View" width="100%"/>
 </p>
 
 > [!TIP]
@@ -114,19 +138,21 @@ The companion extension (`chronos-vscode/`) integrates the `chronos-mcp` engine 
 
 ---
 
-## Universal AI Integrations (9 Clients)
+## Universal AI Integrations (9 Clients &amp; 9 MCP Tools)
 
 `chronos-mcp` speaks standard **Model Context Protocol (MCP v2024-11-05)** over stdio JSON-RPC 2.0 and exposes **9 specialized tools**:
 
-1. `chronos_analyze_file` — Parse source file (7 language families), extract AST symbols/edges, and persist to KuzuDB.
-2. `chronos_get_blast_radius` — Compute PageRank blast-radius, risk score, `confidence_interval`, and `residual_unknowns`.
-3. `chronos_run_mutation_gate` — Run isolated parallel mutation testing on covering tests before accepting edits.
-4. `chronos_query_hotspots` — Identify runtime telemetry bottlenecks, PageRank hubs, and high-complexity functions.
-5. `chronos_contract_status` — Verify public signature locks and breaking changes across concurrent agent sessions.
-6. `chronos_query_graph` — Execute read-only OpenCypher queries (`MATCH (n:ChronosNode) ...`) over KuzuDB.
-7. `chronos_search_graph` — Search symbols via BM25 identifier tokenization (`camelCase`/`snake_case`), regex, and loop/degree filters.
-8. `chronos_get_snippet` — Read exact `start_line..=end_line` source code with callers, callees, covering tests, and loop metrics.
-9. `chronos_get_architecture` — Discover architectural communities (Label Propagation), cohesion ratios, and hidden $O(N^2)$ hotspots.
+| Tool Name | Category | Description |
+| :--- | :--- | :--- |
+| `chronos_analyze_file` | Ingestion | Parse source file (7 language families), extract AST symbols/edges, and persist to KuzuDB. |
+| `chronos_get_blast_radius` | Risk &amp; Bounds | Compute PageRank blast-radius, risk score, `confidence_interval`, and `residual_unknowns`. |
+| `chronos_run_mutation_gate` | Verification | Run isolated parallel mutation testing on covering tests before accepting edits. |
+| `chronos_query_hotspots` | Telemetry | Identify runtime telemetry bottlenecks, PageRank hubs, and high-complexity functions. |
+| `chronos_contract_status` | Contracts | Verify public signature locks and breaking changes across concurrent agent sessions. |
+| `chronos_query_graph` | **v1.3 Cypher** | Execute read-only OpenCypher queries (`MATCH (n:ChronosNode) ...`) over KuzuDB. |
+| `chronos_search_graph` | **v1.3 Discovery** | Search symbols via BM25 identifier tokenization (`camelCase`/`snake_case`), regex, and loop/degree filters. |
+| `chronos_get_snippet` | **v1.3 Context** | Read exact `start_line..=end_line` source code with callers, callees, covering tests, and loop metrics. |
+| `chronos_get_architecture` | **v1.3 Topology** | Discover architectural communities (Label Propagation), cohesion ratios, and hidden $O(N^2)$ hotspots. |
 
 | Client | Platform | Configuration Path |
 | :--- | :--- | :--- |

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" width="100%" height="100%" role="img" aria-labelledby="arch-title arch-desc">
-  <title id="arch-title">CHRONOS-AGENT v1.2 — 4D Living Code Intelligence Architecture</title>
-  <desc id="arch-desc">Four-tier system schematic showing Multi-Language Tree-sitter AST and Runtime Telemetry feeding the 4D Knowledge Graph (Petgraph + KuzuDB), powering the Mutation Arena, Semantic Contract Broker, and Blast-Radius Engine exposed over MCP and CLI.</desc>
+  <title id="arch-title">CHRONOS-AGENT v1.3 — 4D Living Code Intelligence Architecture</title>
+  <desc id="arch-desc">Four-tier system schematic showing 7-Language Tree-sitter AST and Runtime Telemetry feeding the 4D Knowledge Graph (Petgraph + KuzuDB Read-Only Cypher), powering the Mutation Arena, Semantic Contract Broker, and Blast-Radius Engine exposed over 9 MCP Tools and CLI.</desc>
   <defs>
     <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="2" cy="2" r="1" fill="rgba(45,49,66,0.08)"/>
@@ -22,7 +22,7 @@
   <rect x="4" y="4" width="1112" height="552" rx="6" fill="none" stroke="rgba(45,49,66,0.14)" stroke-width="1"/>
 
   <!-- Header -->
-  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" letter-spacing="0.14em">SYSTEM ARCHITECTURE // CHRONOS-AGENT V1.2</text>
+  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" letter-spacing="0.14em">SYSTEM ARCHITECTURE // CHRONOS-AGENT V1.3</text>
   <text x="40" y="64" fill="#2d3142" font-size="24" font-weight="600" font-family="Georgia, 'Instrument Serif', serif">4D Living Code Intelligence &amp; Blast-Radius Harness</text>
   <line x1="40" y1="80" x2="1080" y2="80" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
 
@@ -65,8 +65,8 @@
   <rect x="220" y="96" width="320" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
   <rect x="232" y="104" width="44" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
   <text x="254" y="114" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">AST</text>
-  <text x="380" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Tree-sitter Multi-Language Dispatcher</text>
-  <text x="380" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">.ts / .tsx / .py / .rs • CallRef + Macro TokenTree</text>
+  <text x="380" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Polyglot Tree-sitter Dispatcher (7 Langs)</text>
+  <text x="380" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">TS / Py / Rs / Go / C / C++ / Java • O(N²) Loops</text>
 
   <!-- Box 1B: Runtime Telemetry Ingestor -->
   <rect x="620" y="96" width="320" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
@@ -81,14 +81,14 @@
   <rect x="348" y="216" width="52" height="14" rx="2" fill="#eb6c36"/>
   <text x="374" y="226" fill="#ffffff" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">4D CORE</text>
   <text x="468" y="244" fill="#2d3142" font-size="14" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">ChronosGraph (Petgraph)</text>
-  <text x="468" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PageRank Centrality • &lt;15ms Traversal</text>
+  <text x="468" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PageRank • BM25 • Label Communities</text>
 
   <!-- Box 2B: KuzuDB Persistent Graph -->
   <rect x="696" y="208" width="264" height="72" rx="6" fill="#ededef" stroke="#4f5d75" stroke-width="1"/>
   <rect x="708" y="216" width="48" height="14" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8"/>
-  <text x="732" y="226" fill="#4f5d75" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">STORE</text>
-  <text x="828" y="244" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Embedded KuzuDB Engine</text>
-  <text x="828" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Nodes + CALLS / TESTS / IMPORTS</text>
+  <text x="732" y="226" fill="#4f5d75" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CYPHER</text>
+  <text x="828" y="244" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Embedded KuzuDB Cypher Engine</text>
+  <text x="828" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Read-Only Cypher • 4 Edge Tables</text>
 
   <!-- ================= ROW 3: ANALYTICAL PILLARS ================= -->
   <!-- Box 3A: Mutation Arena -->
@@ -117,15 +117,15 @@
   <rect x="260" y="440" width="380" height="56" rx="6" fill="#ffffff" stroke="#2e5aa8" stroke-width="1.2"/>
   <rect x="272" y="448" width="56" height="14" rx="2" fill="rgba(46,90,168,0.1)" stroke="#2e5aa8" stroke-width="0.8"/>
   <text x="300" y="458" fill="#2e5aa8" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">JSON-RPC</text>
-  <text x="450" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos-mcp Server (5 Tools • 9 AI Clients)</text>
-  <text x="450" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">detail: summary|complete • _meta.provenance.untrusted_content</text>
+  <text x="450" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos-mcp Server (9 Tools • 9 AI Clients)</text>
+  <text x="450" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Cypher • BM25 • Snippet • Arch • Provenance</text>
 
   <!-- Box 4B: CLI & VS Code Extension -->
   <rect x="680" y="440" width="340" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
   <rect x="692" y="448" width="44" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
   <text x="714" y="458" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CLI/UI</text>
   <text x="850" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos CLI &amp; VS Code HUD Extension</text>
-  <text x="850" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">audit • diff --ci • glance • graph • status</text>
+  <text x="850" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">audit • arch • search • snippet • query • diff</text>
 
   <!-- Bottom Legend Strip -->
   <line x1="40" y1="516" x2="1080" y2="516" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
@@ -138,5 +138,5 @@
   <text x="472" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Primary Telemetry / Risk Flow</text>
   <line x1="652" y1="532" x2="676" y2="532" stroke="#2e5aa8" stroke-width="1.4"/>
   <text x="684" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">MCP / Developer Interface</text>
-  <text x="1080" y="536" fill="#7a8399" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">94/94 TESTS PASSING • RUST WORKSPACE</text>
+  <text x="1080" y="536" fill="#7a8399" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">101/101 TESTS PASSING • RUST WORKSPACE</text>
 </svg>
