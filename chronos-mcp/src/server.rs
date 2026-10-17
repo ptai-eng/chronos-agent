@@ -136,6 +136,22 @@ async fn handle_request(req: JsonRpcRequest, state: SharedState) -> JsonRpcRespo
                     let result = tools::handle_contract_status(state, tool_params).await;
                     JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
                 }
+                Some("chronos_query_graph") => {
+                    let result = tools::handle_query_graph(state, tool_params).await;
+                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
+                }
+                Some("chronos_search_graph") => {
+                    let result = tools::handle_search_graph(state, tool_params).await;
+                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
+                }
+                Some("chronos_get_snippet") => {
+                    let result = tools::handle_get_snippet(state, tool_params).await;
+                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
+                }
+                Some("chronos_get_architecture") => {
+                    let result = tools::handle_get_architecture(state, tool_params).await;
+                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
+                }
                 Some(unknown) => {
                     warn!("Unknown tool called: {}", unknown);
                     JsonRpcResponse::err(id, -32601, format!("Tool not found: {}", unknown))

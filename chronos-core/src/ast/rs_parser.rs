@@ -90,7 +90,7 @@ impl RustParser {
             sloc,
             ..StaticHeuristics::default()
         };
-        heuristics.compute_cognitive_load();
+        crate::ast::polyglot_parser::populate_ast_complexity_metrics(tree_node, src, name, &mut heuristics);
 
         let mut node = ChronosNode::new(id, kind, name, qualified_name, location);
         node.heuristics = heuristics;

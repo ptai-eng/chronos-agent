@@ -26,6 +26,12 @@ fn make_function_node(file: &str, name: &str) -> ChronosNode {
             fan_out: 2,
             param_count: 1,
             sloc: 10,
+            loop_count: 1,
+            loop_depth: 2,
+            transitive_loop_depth: 3,
+            linear_scan_in_loop: 1,
+            alloc_in_loop: 0,
+            is_recursive: false,
         },
         telemetry: Some(TelemetrySnapshot {
             captured_at: chrono::Utc::now(),
@@ -251,3 +257,43 @@ fn kuzu_persists_and_restores_edges_across_restart() {
         assert_eq!(tests[0].name, "test_handleOrder");
     }
 }
+
+#[test]
+fn kuzu_readonly_cypher_query_and_complexity_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = PersistentGraph::open(dir.path()).unwrap();
+
+    let mut graph = ChronosGraph::new();
+    graph.add_node(make_function_node("src/hot.ts", "deleteUserSession"));
+    store.sync_from_graph(&graph).unwrap();
+
+    // Query complexity columns and verify string literal 'deleteUserSession' is allowed
+    let res = store
+        .execute_readonly_cypher(
+            "MATCH (f:ChronosNode) WHERE f.name = 'deleteUserSession' AND f.transitive_loop_depth >= 2 RETURN f.name, f.transitive_loop_depth, f.linear_scan_in_loop",
+            100,
+        )
+        .expect("Read-only Cypher query should succeed");
+
+    assert_eq!(res.total_rows, 1);
+    assert_eq!(res.rows[0][0], serde_json::json!("deleteUserSession"));
+    assert_eq!(res.rows[0][1], serde_json::json!(3));
+    assert_eq!(res.rows[0][2], serde_json::json!(1));
+}
+
+#[test]
+fn kuzu_readonly_cypher_blocks_mutations() {
+    use chronos_core::graph::persistent::validate_readonly_cypher;
+
+    assert!(validate_readonly_cypher("MATCH (n:ChronosNode) DELETE n").is_err());
+    assert!(validate_readonly_cypher("CREATE (n:ChronosNode {id: 'x'})").is_err());
+    assert!(validate_readonly_cypher("MATCH (n:ChronosNode) SET n.name = 'pwn' RETURN n").is_err());
+    assert!(validate_readonly_cypher("COPY ChronosNode FROM 'secret.csv'").is_err());
+    assert!(validate_readonly_cypher("MATCH (n) RETURN n; DROP TABLE ChronosNode").is_err());
+    assert!(
+        validate_readonly_cypher("MATCH (n:ChronosNode) WHERE n.name = 'CREATE_OR_DELETE' RETURN n.name")
+            .is_ok(),
+        "Keywords inside quoted string literals must be allowed"
+    );
+}
+

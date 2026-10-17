@@ -19,9 +19,11 @@
 pub mod diff;
 pub mod dispatcher;
 pub mod heuristics;
+pub mod polyglot_parser;
 pub mod py_parser;
 pub mod rs_parser;
 pub mod ts_parser;
 
 pub use dispatcher::LanguageDispatcher;
+pub use polyglot_parser::{CppParser, GoParser, JavaParser};
 pub use ts_parser::{ParsedModule, TypeScriptParser};

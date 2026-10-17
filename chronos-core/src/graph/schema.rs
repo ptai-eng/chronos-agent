@@ -100,17 +100,42 @@ pub struct StaticHeuristics {
     pub sloc: u32,
     /// Derived cognitive load score (0-100): higher = harder to understand/change
     pub cognitive_load_score: f32,
+    /// Number of loop statements inside the function body
+    #[serde(default)]
+    pub loop_count: u32,
+    /// Maximum nested loop depth inside the function body (polynomial-degree proxy O(N^k))
+    #[serde(default)]
+    pub loop_depth: u32,
+    /// Worst-case nested loop depth propagated along outbound CALLS edges
+    #[serde(default)]
+    pub transitive_loop_depth: u32,
+    /// Count of linear scans (.find/.contains/.indexOf/.includes) inside a loop (hidden O(N^2))
+    #[serde(default)]
+    pub linear_scan_in_loop: u32,
+    /// Count of heap allocations/appends (.push/.append/new/vec!/make) inside a loop
+    #[serde(default)]
+    pub alloc_in_loop: u32,
+    /// True if this function calls itself directly or participates in a call cycle
+    #[serde(default)]
+    pub is_recursive: bool,
 }
 
 impl StaticHeuristics {
     /// Compute cognitive load score from component metrics.
-    /// Formula inspired by SonarQube's Cognitive Complexity metric.
+    /// Formula combines branching, fan-out, parameters, SLOC, and polynomial loop/scan penalties.
     pub fn compute_cognitive_load(&mut self) {
+        if self.transitive_loop_depth < self.loop_depth {
+            self.transitive_loop_depth = self.loop_depth;
+        }
+        let loop_penalty = self.loop_depth.saturating_sub(1) as f32 * 8.0
+            + self.linear_scan_in_loop as f32 * 10.0
+            + if self.is_recursive { 6.0 } else { 0.0 };
         self.cognitive_load_score = (
             self.cyclomatic_complexity as f32 * 2.0
             + self.fan_out as f32 * 1.5
             + self.param_count as f32 * 1.0
             + (self.sloc as f32 / 10.0).min(20.0)
+            + loop_penalty
         ).min(100.0);
     }
 }
@@ -364,6 +389,12 @@ impl ChronosGraph {
             let callee_id = name_to_id.get(&call_ref.callee_name).cloned();
 
             match (caller_id, callee_id) {
+                (Some(caller), Some(callee)) if caller == callee => {
+                    if let Some(node) = self.get_node_mut(&caller) {
+                        node.heuristics.is_recursive = true;
+                    }
+                    self.resolved_call_sites += 1;
+                }
                 (Some(caller), Some(callee)) if caller != callee => {
                     let call_edge = ChronosEdge {
                         kind: EdgeKind::Calls,
@@ -395,8 +426,48 @@ impl ChronosGraph {
             }
         }
 
-        // Refresh fan_in / fan_out on nodes
+        // Propagate interprocedural transitive_loop_depth & mutual recursion across CALLS edges
         let all_ids: Vec<NodeId> = self.node_index.keys().cloned().collect();
+        for id in &all_ids {
+            if let Some(node) = self.get_node_mut(id) {
+                if node.heuristics.transitive_loop_depth < node.heuristics.loop_depth {
+                    node.heuristics.transitive_loop_depth = node.heuristics.loop_depth;
+                }
+            }
+        }
+        // Up to 4 hops of interprocedural loop depth propagation
+        for _ in 0..4 {
+            let mut updates: Vec<(NodeId, u32, bool)> = Vec::new();
+            for id in &all_ids {
+                let Some(caller_node) = self.get_node(id) else { continue; };
+                let own_depth = caller_node.heuristics.loop_depth;
+                let mut max_callee_trans = 0u32;
+                let mut mutual_rec = caller_node.heuristics.is_recursive;
+
+                for callee in self.callees_of(id) {
+                    max_callee_trans = max_callee_trans.max(callee.heuristics.transitive_loop_depth);
+                    // Check 2-hop mutual recursion (A -> B -> A)
+                    if self.callees_of(&callee.id).iter().any(|c| &c.id == id) {
+                        mutual_rec = true;
+                    }
+                }
+                let candidate = (own_depth + max_callee_trans).min(10);
+                if candidate > caller_node.heuristics.transitive_loop_depth || mutual_rec != caller_node.heuristics.is_recursive {
+                    updates.push((id.clone(), candidate.max(caller_node.heuristics.transitive_loop_depth), mutual_rec));
+                }
+            }
+            if updates.is_empty() {
+                break;
+            }
+            for (id, new_trans, rec) in updates {
+                if let Some(node) = self.get_node_mut(&id) {
+                    node.heuristics.transitive_loop_depth = new_trans;
+                    node.heuristics.is_recursive = rec;
+                }
+            }
+        }
+
+        // Refresh fan_in / fan_out on nodes
         for id in all_ids {
             let fin = self.callers_of(&id).len() as u32;
             let fout = self.callees_of(&id).len() as u32;
@@ -467,6 +538,154 @@ impl ChronosGraph {
             .into_iter()
             .map(|(idx, score)| (self.graph[idx].id.clone(), score))
             .collect()
+    }
+
+    /// Detect architectural communities (clusters) over the CALLS/CONTAINS graph
+    /// using deterministic Label Propagation initialized by file/module stem,
+    /// computing internal Cohesion and cross-cluster Coupling.
+    pub fn detect_communities(&self) -> Vec<ArchCluster> {
+        if self.graph.node_count() == 0 {
+            return vec![];
+        }
+
+        let pagerank = self.compute_pagerank(15, 0.85);
+
+        // Initialize labels from parent folder + file stem so disconnected nodes group sensibly
+        let mut labels: HashMap<NodeIndex, String> = HashMap::new();
+        for idx in self.graph.node_indices() {
+            let node = &self.graph[idx];
+            let stem = node
+                .location
+                .file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("root");
+            let parent = node
+                .location
+                .file
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            let init_label = if parent.is_empty() || parent == "." || parent == "src" {
+                stem.to_string()
+            } else {
+                format!("{parent}/{stem}")
+            };
+            labels.insert(idx, init_label);
+        }
+
+        // Deterministic Label Propagation (6 iterations): strongly connected cross-file call groups merge
+        let mut indices: Vec<NodeIndex> = self.graph.node_indices().collect();
+        indices.sort_by_key(|idx| self.graph[*idx].id.0.clone());
+
+        for _ in 0..6 {
+            let mut changed = false;
+            for &idx in &indices {
+                let mut freq: HashMap<String, usize> = HashMap::new();
+                // Self-weight = 1 to stabilize file boundaries unless call coupling dominates
+                if let Some(own) = labels.get(&idx) {
+                    *freq.entry(own.clone()).or_insert(0) += 1;
+                }
+                for edge in self.graph.edges_directed(idx, petgraph::Direction::Outgoing) {
+                    if let Some(lbl) = labels.get(&edge.target()) {
+                        *freq.entry(lbl.clone()).or_insert(0) += 2;
+                    }
+                }
+                for edge in self.graph.edges_directed(idx, petgraph::Direction::Incoming) {
+                    if let Some(lbl) = labels.get(&edge.source()) {
+                        *freq.entry(lbl.clone()).or_insert(0) += 2;
+                    }
+                }
+                if let Some((best_label, _)) = freq
+                    .into_iter()
+                    .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
+                {
+                    if labels.get(&idx) != Some(&best_label) {
+                        labels.insert(idx, best_label);
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+
+        // Group nodes by final community label
+        let mut groups: HashMap<String, Vec<NodeIndex>> = HashMap::new();
+        for (idx, lbl) in &labels {
+            groups.entry(lbl.clone()).or_default().push(*idx);
+        }
+
+        let mut clusters: Vec<ArchCluster> = Vec::new();
+        for (label, member_indices) in groups {
+            let mut internal_edges = 0usize;
+            let mut external_edges = 0usize;
+            let member_set: std::collections::HashSet<NodeIndex> =
+                member_indices.iter().copied().collect();
+
+            for &idx in &member_indices {
+                for edge in self.graph.edges_directed(idx, petgraph::Direction::Outgoing) {
+                    if member_set.contains(&edge.target()) {
+                        internal_edges += 1;
+                    } else {
+                        external_edges += 1;
+                    }
+                }
+                for edge in self.graph.edges_directed(idx, petgraph::Direction::Incoming) {
+                    if !member_set.contains(&edge.source()) {
+                        external_edges += 1;
+                    }
+                }
+            }
+
+            let total_incident = internal_edges + external_edges;
+            let cohesion = if total_incident > 0 {
+                internal_edges as f32 / total_incident as f32
+            } else {
+                1.0
+            };
+
+            let mut sorted_members = member_indices.clone();
+            sorted_members.sort_by(|a, b| {
+                let pr_a = pagerank.get(&self.graph[*a].id).copied().unwrap_or(0.0);
+                let pr_b = pagerank.get(&self.graph[*b].id).copied().unwrap_or(0.0);
+                pr_b.partial_cmp(&pr_a).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            let top_nodes: Vec<String> = sorted_members
+                .iter()
+                .take(5)
+                .map(|&idx| self.graph[idx].name.clone())
+                .collect();
+
+            let mut files: Vec<String> = member_indices
+                .iter()
+                .map(|&idx| {
+                    self.graph[idx]
+                        .location
+                        .file
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                })
+                .collect();
+            files.sort();
+            files.dedup();
+
+            clusters.push(ArchCluster {
+                label,
+                member_count: member_indices.len(),
+                internal_edges,
+                external_edges,
+                cohesion_score: cohesion,
+                top_nodes,
+                files,
+            });
+        }
+
+        clusters.sort_by(|a, b| b.member_count.cmp(&a.member_count).then_with(|| a.label.cmp(&b.label)));
+        clusters
     }
 
     /// Look up a node by its stable NodeId.
@@ -690,6 +909,18 @@ impl Default for ChronosGraph {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// An architectural community cluster discovered via Label Propagation over the code graph.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchCluster {
+    pub label: String,
+    pub member_count: usize,
+    pub internal_edges: usize,
+    pub external_edges: usize,
+    pub cohesion_score: f32,
+    pub top_nodes: Vec<String>,
+    pub files: Vec<String>,
 }
 
 /// Summary report on graph status for display.

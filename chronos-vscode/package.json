@@ -2,7 +2,7 @@
   "name": "chronos-agent",
   "displayName": "CHRONOS Agent",
   "description": "4D Living Code Intelligence Harness — Real-time blast-radius + mutation score",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "publisher": "ptai-eng",
   "engines": {
     "vscode": "^1.90.0"
@@ -32,7 +32,13 @@
   "license": "MIT",
   "activationEvents": [
     "onLanguage:typescript",
-    "onLanguage:javascript"
+    "onLanguage:javascript",
+    "onLanguage:python",
+    "onLanguage:rust",
+    "onLanguage:go",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:java"
   ],
   "main": "./out/extension.js",
   "contributes": {

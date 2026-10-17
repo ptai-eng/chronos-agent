@@ -104,6 +104,51 @@ enum Commands {
         #[arg(short, long)]
         watch: Option<PathBuf>,
     },
+    /// Execute a Read-Only Cypher query directly against the embedded KuzuDB graph
+    Query {
+        /// Read-Only Cypher query string (e.g. "MATCH (n:ChronosNode) RETURN n.name, n.loop_depth LIMIT 10")
+        cypher: String,
+        /// Optional files or directories to index before querying
+        #[arg(short, long)]
+        files: Vec<PathBuf>,
+        /// Max rows to return (default: 200)
+        #[arg(long, default_value_t = 200)]
+        max_rows: usize,
+    },
+    /// BM25 + Regex + Complexity search across the 4D Knowledge Graph
+    Search {
+        /// Natural-language or keyword query (splits camelCase & snake_case)
+        #[arg(short, long)]
+        query: Option<String>,
+        /// Regex pattern for symbol name
+        #[arg(short, long)]
+        pattern: Option<String>,
+        /// Minimum nested loop depth (transitive_loop_depth)
+        #[arg(long)]
+        min_loop_depth: Option<u32>,
+        /// Optional files or directories to index
+        #[arg(short, long)]
+        files: Vec<PathBuf>,
+        /// Max results (default: 25)
+        #[arg(short, long, default_value_t = 25)]
+        limit: usize,
+    },
+    /// Retrieve verbatim source code snippet + callers, callees, tests, and AST complexity
+    Snippet {
+        /// Symbol name (function/method/class)
+        symbol: String,
+        /// Optional file path filter
+        #[arg(short, long)]
+        file: Option<PathBuf>,
+    },
+    /// Generate workspace architecture report with community clusters and O(N^2) hotspots
+    Arch {
+        /// Optional directory prefix to scope architecture analysis
+        path: Option<PathBuf>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[tokio::main]
@@ -116,8 +161,11 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
-    let workspace = cli.workspace.canonicalize()
+    let workspace_raw = cli.workspace.canonicalize()
         .unwrap_or_else(|_| cli.workspace.clone());
+    let workspace = PathBuf::from(
+        workspace_raw.to_string_lossy().trim_start_matches(r"\\?\")
+    );
 
     match cli.command {
         Commands::Audit { file, strict, test_cmd } => {
@@ -252,6 +300,145 @@ async fn main() -> Result<()> {
         }
         Commands::Status { watch } => {
             commands::status::run(workspace, watch).await
+        }
+        Commands::Query { cypher, files, max_rows } => {
+            use chronos_core::graph::persistent::PersistentGraph;
+            let graph = build_cli_graph(&workspace, &files)?;
+            let db_path = workspace.join(".chronos").join("graph.kuzu");
+            if let Some(parent) = db_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let db = PersistentGraph::open(&db_path)?;
+            db.sync_from_graph(&graph)?;
+            let res = db.execute_readonly_cypher(&cypher, max_rows)?;
+            println!("{}", serde_json::to_string_pretty(&res)?);
+            Ok(())
+        }
+        Commands::Search { query, pattern, min_loop_depth, files, limit } => {
+            use chronos_core::graph::query::{GraphQueryEngine, GraphSearchRequest};
+            let graph = build_cli_graph(&workspace, &files)?;
+            let qe = GraphQueryEngine::new(&graph);
+            let resp = qe.search_graph(&GraphSearchRequest {
+                query,
+                name_pattern: pattern,
+                min_loop_depth,
+                limit,
+                ..Default::default()
+            });
+            println!("{}", serde_json::to_string_pretty(&resp)?);
+            Ok(())
+        }
+        Commands::Snippet { symbol, file } => {
+            use chronos_core::graph::query::GraphQueryEngine;
+            let files = file.iter().cloned().collect::<Vec<_>>();
+            let graph = build_cli_graph(&workspace, &files)?;
+            let qe = GraphQueryEngine::new(&graph);
+            let file_filter = file.as_ref().map(|f| f.to_string_lossy().to_string());
+            match qe.get_code_snippet(&symbol, file_filter.as_deref()) {
+                Some(snip) => println!("{}", serde_json::to_string_pretty(&snip)?),
+                None => {
+                    eprintln!("Symbol '{}' not found in workspace", symbol);
+                    std::process::exit(1);
+                }
+            }
+            Ok(())
+        }
+        Commands::Arch { path, json } => {
+            use chronos_core::graph::query::GraphQueryEngine;
+            let files = path.iter().cloned().collect::<Vec<_>>();
+            let graph = build_cli_graph(&workspace, &files)?;
+            let qe = GraphQueryEngine::new(&graph);
+            let prefix = path.as_ref().map(|p| p.to_string_lossy().to_string());
+            let arch = qe.get_architecture(prefix.as_deref());
+            if json {
+                println!("{}", serde_json::to_string_pretty(&arch)?);
+            } else {
+                println!(
+                    "CHRONOS Architecture Report ({} nodes, {} edges, {} clusters)",
+                    arch.total_nodes,
+                    arch.total_edges,
+                    arch.clusters.len()
+                );
+                println!("Languages: {:?}", arch.languages);
+                println!("\nTop Community Clusters:");
+                for c in arch.clusters.iter().take(10) {
+                    println!(
+                        "  - {} ({} symbols, cohesion: {:.0}%, top: {})",
+                        c.label,
+                        c.member_count,
+                        c.cohesion_score * 100.0,
+                        c.top_nodes.join(", ")
+                    );
+                }
+                if !arch.algorithmic_hotspots.is_empty() {
+                    println!("\nAlgorithmic Hotspots (Nested Loops / Linear Scans in Loops / Recursion):");
+                    for h in arch.algorithmic_hotspots.iter().take(10) {
+                        println!(
+                            "  - {} ({}:{}) — transitive_loop_depth={}, linear_scan_in_loop={}, recursive={}",
+                            h.name, h.file, h.line, h.transitive_loop_depth, h.linear_scan_in_loop, h.is_recursive
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+fn build_cli_graph(workspace: & std::path::Path, explicit_files: &[PathBuf]) -> Result<chronos_core::graph::schema::ChronosGraph> {
+    use chronos_core::{
+        ast::dispatcher::LanguageDispatcher,
+        graph::schema::ChronosGraph,
+    };
+    let mut graph = ChronosGraph::new();
+    let mut dispatcher = LanguageDispatcher::new()?;
+    let mut targets = Vec::new();
+
+    if explicit_files.is_empty() {
+        collect_cli_files(workspace, &mut targets, 300);
+    } else {
+        for p in explicit_files {
+            let resolved = if p.is_absolute() { p.clone() } else { workspace.join(p) };
+            if resolved.is_dir() {
+                collect_cli_files(&resolved, &mut targets, 300);
+            } else if resolved.exists() {
+                targets.push(resolved);
+            }
+        }
+    }
+
+    for file in targets {
+        if LanguageDispatcher::is_supported(&file) {
+            if let Ok(parsed) = dispatcher.parse_file(&file) {
+                graph.ingest_parsed_module(&parsed);
+            }
+        }
+    }
+    Ok(graph)
+}
+
+fn collect_cli_files(dir: &std::path::Path, out: &mut Vec<PathBuf>, max_files: usize) {
+    use chronos_core::ast::dispatcher::LanguageDispatcher;
+    if out.len() >= max_files {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else { return; };
+    for entry in entries.flatten() {
+        if out.len() >= max_files {
+            break;
+        }
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if path.is_dir() {
+            if matches!(
+                name.as_str(),
+                ".git" | "node_modules" | "target" | ".venv" | "venv" | ".chronos" | "dist" | "build" | "out"
+            ) {
+                continue;
+            }
+            collect_cli_files(&path, out, max_files);
+        } else if LanguageDispatcher::is_supported(&path) {
+            out.push(path);
         }
     }
 }

@@ -582,7 +582,8 @@ fn compute_function_heuristics(node: tree_sitter::Node, source: &[u8]) -> Static
         }
     }
 
-    h.compute_cognitive_load();
+    let fn_name = get_child_text(node, "name", source).unwrap_or_default();
+    crate::ast::polyglot_parser::populate_ast_complexity_metrics(node, source, &fn_name, &mut h);
     h
 }
 
