@@ -45,6 +45,11 @@ impl RustParser {
         }).count();
 
         self.visit_node(root, src_bytes, path, &mut module, false, None);
+        crate::ast::polyglot_parser::extract_routes_and_http_calls_from_source(
+            path,
+            source,
+            &mut module,
+        );
         Ok(module)
     }
 

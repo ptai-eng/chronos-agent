@@ -226,6 +226,8 @@ pub fn generate_mutants(source: &str, file_path: &str) -> Vec<Mutant> {
 const CONDITION_FLIPS: &[(&str, &str)] = &[
     (" === ", " !== "),
     (" !== ", " === "),
+    (" == ", " != "),
+    (" != ", " == "),
     (" >= ", " < "),
     (" <= ", " > "),
     (" > ", " < "),
@@ -273,9 +275,12 @@ fn detect_return_statement(line: &str, full_source: &str, line_idx: usize) -> Op
     let lines: Vec<&str> = full_source.lines().collect();
     for i in (0..line_idx).rev() {
         let l = lines[i].trim();
-        if l.contains("function ") || l.contains("=> {") || l.contains("async ") {
+        if l.contains("function ") || l.contains("=> {") || l.contains("async ") || l.contains("fn ") || l.contains("def ") || l.contains("func ") {
             // Extract function name heuristically
             let name = l.split("function ").nth(1)
+                .or_else(|| l.split("fn ").nth(1))
+                .or_else(|| l.split("def ").nth(1))
+                .or_else(|| l.split("func ").nth(1))
                 .and_then(|s| s.split('(').next())
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|| "anonymous".to_string());
@@ -287,17 +292,16 @@ fn detect_return_statement(line: &str, full_source: &str, line_idx: usize) -> Op
 
 /// Mutate a return statement on a specific line to return null
 fn mutate_return_to_null(source: &str, line_idx: usize) -> String {
-    let lines: Vec<&str> = source.lines().collect();
-    let mut new_lines = lines.clone();
-    
+    let mut new_lines: Vec<String> = source.lines().map(|l| l.to_string()).collect();
+
     if let Some(line) = new_lines.get_mut(line_idx) {
         let trimmed = line.trim();
         if trimmed.starts_with("return ") {
             let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-            *line = Box::leak(format!("{}return null;", indent).into_boxed_str());
+            *line = format!("{}return null;", indent);
         }
     }
-    
+
     new_lines.join("\n")
 }
 
@@ -313,6 +317,254 @@ fn replace_first_in_line(source: &str, line_idx: usize, from: &str, to: &str) ->
     }
     
     new_lines.join("\n")
+}
+
+/// Build a single combined "Super-Mutant" source file embedding all non-overlapping line
+/// mutations behind runtime environment variable checks (`CHRONOS_MUTANT_ID`).
+///
+/// For compiled languages (Rust, Go, C/C++, Java), this allows compiling the test binary
+/// **once** ($O(1)$ compile passes instead of $O(N)$) and evaluating each mutant in parallel
+/// solely by passing `CHRONOS_MUTANT_ID=<mutant.id>` to the test runner process.
+pub fn build_super_mutant_source(original_source: &str, mutants: &[Mutant], ext: &str) -> String {
+    if mutants.is_empty() {
+        return original_source.to_string();
+    }
+
+    let orig_lines: Vec<&str> = original_source.lines().collect();
+    let mut out_lines: Vec<String> = orig_lines.iter().map(|l| (*l).to_string()).collect();
+
+    // Group mutants by 1-indexed target_line (pick first non-overlapping mutant per line)
+    let mut by_line: std::collections::HashMap<usize, &Mutant> = std::collections::HashMap::new();
+    for m in mutants {
+        by_line.entry(m.target_line).or_insert(m);
+    }
+
+    for (line_num, mutant) in by_line {
+        let line_idx = line_num.saturating_sub(1);
+        let Some(orig_line) = orig_lines.get(line_idx).copied() else {
+            continue;
+        };
+        let mut_lines: Vec<&str> = mutant.mutated_source.lines().collect();
+        let Some(mut_line) = mut_lines.get(line_idx).copied() else {
+            continue;
+        };
+        if orig_line == mut_line {
+            continue;
+        }
+
+        let id_str = mutant.id.to_string();
+        let indent: String = orig_line.chars().take_while(|c| c.is_whitespace()).collect();
+        let orig_trim = orig_line.trim();
+        let mut_trim = mut_line.trim();
+
+        // Statement-level or inline expression guard depending on language and line structure
+        let guarded = match ext {
+            "rs" => {
+                if orig_trim.starts_with("return ") {
+                    format!(
+                        "{indent}if std::env::var(\"CHRONOS_MUTANT_ID\").as_deref() == Ok(\"{id_str}\") {{ {mut_trim} }} else {{ {orig_trim} }}"
+                    )
+                } else {
+                    apply_inline_env_guard(orig_line, &mutant.kind, &id_str, "rs")
+                }
+            }
+            "go" => {
+                if orig_trim.starts_with("return ") {
+                    format!(
+                        "{indent}if os.Getenv(\"CHRONOS_MUTANT_ID\") == \"{id_str}\" {{ {mut_trim} }} else {{ {orig_trim} }}"
+                    )
+                } else {
+                    apply_inline_env_guard(orig_line, &mutant.kind, &id_str, "go")
+                }
+            }
+            "py" => {
+                if orig_trim.starts_with("return ") {
+                    let orig_val = orig_trim.trim_start_matches("return ").trim();
+                    let mut_val = mut_trim.trim_start_matches("return ").trim().trim_end_matches(';');
+                    let py_mut_val = if mut_val == "null" { "None" } else { mut_val };
+                    format!(
+                        "{indent}return ({py_mut_val} if __import__(\"os\").environ.get(\"CHRONOS_MUTANT_ID\") == \"{id_str}\" else {orig_val})"
+                    )
+                } else {
+                    apply_inline_env_guard(orig_line, &mutant.kind, &id_str, "py")
+                }
+            }
+            "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" => {
+                if orig_trim.starts_with("return ") {
+                    format!(
+                        "{indent}if (getenv(\"CHRONOS_MUTANT_ID\") && std::string(getenv(\"CHRONOS_MUTANT_ID\")) == \"{id_str}\") {{ {mut_trim} }} else {{ {orig_trim} }}"
+                    )
+                } else {
+                    apply_inline_env_guard(orig_line, &mutant.kind, &id_str, "cpp")
+                }
+            }
+            "java" => {
+                if orig_trim.starts_with("return ") {
+                    format!(
+                        "{indent}if (\"{id_str}\".equals(System.getenv(\"CHRONOS_MUTANT_ID\"))) {{ {mut_trim} }} else {{ {orig_trim} }}"
+                    )
+                } else {
+                    apply_inline_env_guard(orig_line, &mutant.kind, &id_str, "java")
+                }
+            }
+            _ => {
+                // Default: TypeScript / JavaScript
+                if orig_trim.starts_with("return ") {
+                    format!(
+                        "{indent}if (process.env.CHRONOS_MUTANT_ID === \"{id_str}\") {{ {mut_trim} }} else {{ {orig_trim} }}"
+                    )
+                } else {
+                    apply_inline_env_guard(orig_line, &mutant.kind, &id_str, "ts")
+                }
+            }
+        };
+
+        if let Some(slot) = out_lines.get_mut(line_idx) {
+            *slot = guarded;
+        }
+    }
+
+    out_lines.join("\n")
+}
+
+fn apply_inline_env_guard(orig_line: &str, kind: &MutantKind, id_str: &str, lang: &str) -> String {
+    let (from, to) = match kind {
+        MutantKind::ConditionFlip { original, mutated } => (original.clone(), mutated.clone()),
+        MutantKind::BoundaryShift { original, mutated } => (original.clone(), mutated.clone()),
+        MutantKind::HttpStatusSwap { original_status, mutated_status } => {
+            (original_status.to_string(), mutated_status.to_string())
+        }
+        _ => return orig_line.to_string(),
+    };
+
+    let mutated_line = if let Some(pos) = orig_line.find(&from) {
+        let mut s = orig_line.to_string();
+        s.replace_range(pos..pos + from.len(), &to);
+        s
+    } else {
+        return orig_line.to_string();
+    };
+
+    // If the line is an `if (...) {` header, we can guard the condition expression directly
+    let trimmed = orig_line.trim();
+    if trimmed.starts_with("if ") || trimmed.starts_with("if(") {
+        match lang {
+            "rs" => {
+                // In Rust: `if cond {` -> `if (if std::env::var("CHRONOS_MUTANT_ID").as_deref() == Ok("ID") { mut_cond } else { orig_cond }) {`
+                if let (Some(orig_cond), Some(mut_cond)) = (
+                    extract_rust_or_go_if_cond(orig_line),
+                    extract_rust_or_go_if_cond(&mutated_line),
+                ) {
+                    let replacement = format!(
+                        "(if std::env::var(\"CHRONOS_MUTANT_ID\").as_deref() == Ok(\"{id_str}\") {{ {mut_cond} }} else {{ {orig_cond} }})"
+                    );
+                    return orig_line.replacen(&orig_cond, &replacement, 1);
+                }
+            }
+            "go" => {
+                if let (Some(orig_cond), Some(mut_cond)) = (
+                    extract_rust_or_go_if_cond(orig_line),
+                    extract_rust_or_go_if_cond(&mutated_line),
+                ) {
+                    let replacement = format!(
+                        "(func() bool {{ if os.Getenv(\"CHRONOS_MUTANT_ID\") == \"{id_str}\" {{ return {mut_cond} }}; return {orig_cond} }}())"
+                    );
+                    return orig_line.replacen(&orig_cond, &replacement, 1);
+                }
+            }
+            "py" => {
+                if let (Some(orig_cond), Some(mut_cond)) = (
+                    extract_py_if_cond(orig_line),
+                    extract_py_if_cond(&mutated_line),
+                ) {
+                    let replacement = format!(
+                        "({mut_cond} if __import__(\"os\").environ.get(\"CHRONOS_MUTANT_ID\") == \"{id_str}\" else {orig_cond})"
+                    );
+                    return orig_line.replacen(&orig_cond, &replacement, 1);
+                }
+            }
+            "cpp" => {
+                if let (Some(orig_cond), Some(mut_cond)) = (
+                    extract_paren_if_cond(orig_line),
+                    extract_paren_if_cond(&mutated_line),
+                ) {
+                    let replacement = format!(
+                        "(getenv(\"CHRONOS_MUTANT_ID\") && std::string(getenv(\"CHRONOS_MUTANT_ID\")) == \"{id_str}\" ? ({mut_cond}) : ({orig_cond}))"
+                    );
+                    return orig_line.replacen(&orig_cond, &replacement, 1);
+                }
+            }
+            "java" => {
+                if let (Some(orig_cond), Some(mut_cond)) = (
+                    extract_paren_if_cond(orig_line),
+                    extract_paren_if_cond(&mutated_line),
+                ) {
+                    let replacement = format!(
+                        "(\"{id_str}\".equals(System.getenv(\"CHRONOS_MUTANT_ID\")) ? ({mut_cond}) : ({orig_cond}))"
+                    );
+                    return orig_line.replacen(&orig_cond, &replacement, 1);
+                }
+            }
+            _ => {
+                if let (Some(orig_cond), Some(mut_cond)) = (
+                    extract_paren_if_cond(orig_line),
+                    extract_paren_if_cond(&mutated_line),
+                ) {
+                    let replacement = format!(
+                        "(process.env.CHRONOS_MUTANT_ID === \"{id_str}\" ? ({mut_cond}) : ({orig_cond}))"
+                    );
+                    return orig_line.replacen(&orig_cond, &replacement, 1);
+                }
+            }
+        }
+    }
+
+    // Fallback for HTTP status swaps or arithmetic shifts outside `if` headers
+    let expr_guard = match lang {
+        "rs" => format!(
+            "/*CHRONOS_MUTANT:{id_str}*/ {from}"
+        ),
+        _ => format!(
+            "(process.env.CHRONOS_MUTANT_ID === \"{id_str}\" ? {to} : {from})"
+        ),
+    };
+    orig_line.replacen(&from, &expr_guard, 1)
+}
+
+fn extract_paren_if_cond(line: &str) -> Option<String> {
+    let idx = line.find("if")?;
+    let rest = &line[idx + 2..];
+    let open = rest.find('(')?;
+    let close = rest.rfind(')')?;
+    if close > open + 1 {
+        Some(rest[open + 1..close].trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_rust_or_go_if_cond(line: &str) -> Option<String> {
+    let idx = line.find("if ")?;
+    let rest = &line[idx + 3..];
+    let brace = rest.rfind('{')?;
+    let cond = rest[..brace].trim();
+    if !cond.is_empty() {
+        Some(cond.to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_py_if_cond(line: &str) -> Option<String> {
+    let idx = line.find("if ")?;
+    let rest = &line[idx + 3..];
+    let colon = rest.rfind(':')?;
+    let cond = rest[..colon].trim();
+    if !cond.is_empty() {
+        Some(cond.to_string())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -425,5 +677,24 @@ for (let i = 0; i < items.length; i++) {
         let desc = kind.description();
         assert!(desc.contains(">="), "Description should mention original operator");
         assert!(desc.contains("<"), "Description should mention mutated operator");
+    }
+
+    #[test]
+    fn test_build_super_mutant_source_polyglot() {
+        let ts_mutants = generate_mutants(SAMPLE_SOURCE, "src/service.ts");
+        let super_ts = build_super_mutant_source(SAMPLE_SOURCE, &ts_mutants, "ts");
+        assert!(
+            super_ts.contains("process.env.CHRONOS_MUTANT_ID"),
+            "TypeScript super-mutant source should contain process.env.CHRONOS_MUTANT_ID guard"
+        );
+
+        let rs_source = "pub fn is_adult(age: u32) -> bool {\n    if age >= 18 {\n        return true;\n    }\n    return false;\n}\n";
+        let rs_mutants = generate_mutants(rs_source, "src/lib.rs");
+        assert!(!rs_mutants.is_empty(), "Should generate Rust condition flip mutants");
+        let super_rs = build_super_mutant_source(rs_source, &rs_mutants, "rs");
+        assert!(
+            super_rs.contains("std::env::var(\"CHRONOS_MUTANT_ID\")"),
+            "Rust super-mutant source should contain std::env::var(\"CHRONOS_MUTANT_ID\") guard"
+        );
     }
 }

@@ -114,8 +114,17 @@ impl PersistentGraph {
             let _ = conn.query(&format!("ALTER TABLE ChronosNode ADD IF NOT EXISTS {alter_col}"));
         }
 
+        // File content hash table for Incremental xxHash64 Merkle Caching (v1.4)
+        let _ = conn.query(
+            "CREATE NODE TABLE IF NOT EXISTS ChronosFileHash (
+                file     STRING,
+                xxhash64 STRING,
+                PRIMARY KEY (file)
+            )",
+        );
+
         // Relationship tables
-        for label in &["CALLS", "CONTAINS", "TESTS", "IMPORTS"] {
+        for label in &["CALLS", "CONTAINS", "TESTS", "IMPORTS", "CO_CHANGES_WITH"] {
             let ddl = format!(
                 "CREATE REL TABLE IF NOT EXISTS {label} (FROM ChronosNode TO ChronosNode)"
             );
@@ -254,6 +263,7 @@ impl PersistentGraph {
             crate::graph::schema::EdgeKind::Imports | crate::graph::schema::EdgeKind::Implements => {
                 "IMPORTS"
             }
+            crate::graph::schema::EdgeKind::CoChangesWith => "CO_CHANGES_WITH",
         };
 
         let query = format!(
@@ -425,6 +435,7 @@ impl PersistentGraph {
             ("CONTAINS", crate::graph::schema::EdgeKind::Contains),
             ("TESTS", crate::graph::schema::EdgeKind::Tests),
             ("IMPORTS", crate::graph::schema::EdgeKind::Imports),
+            ("CO_CHANGES_WITH", crate::graph::schema::EdgeKind::CoChangesWith),
         ];
 
         let mut restored_edges = 0usize;
@@ -461,6 +472,119 @@ impl PersistentGraph {
             count, restored_edges
         );
         Ok(count)
+    }
+
+    /// Incrementally synchronize a list of workspace files using `xxHash64` Merkle file hashes.
+    ///
+    /// Files whose `xxHash64` matches the persisted `ChronosFileHash` entry in KuzuDB (and whose
+    /// nodes are already loaded in `graph`) are skipped completely without invoking Tree-sitter.
+    /// Modified or new files have their stale nodes evicted and are re-parsed and synced.
+    pub fn sync_workspace_incremental(
+        &self,
+        graph: &mut ChronosGraph,
+        files: &[std::path::PathBuf],
+        dispatcher: &mut crate::ast::dispatcher::LanguageDispatcher,
+    ) -> Result<IncrementalSyncStats> {
+        if graph.node_count() == 0 {
+            let _ = self.load_into_graph(graph);
+        }
+
+        let conn = Connection::new(&self.db)
+            .context("Failed to open KuzuDB connection for incremental sync")?;
+
+        // Load stored xxHash64 map
+        let mut stored_hashes: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        if let Ok(mut res) = conn.query("MATCH (f:ChronosFileHash) RETURN f.file, f.xxhash64") {
+            while let Some(row) = res.next() {
+                let f = get_string(&row, 0).unwrap_or_default();
+                let h = get_string(&row, 1).unwrap_or_default();
+                if !f.is_empty() {
+                    stored_hashes.insert(f, h);
+                }
+            }
+        }
+
+        let files_in_graph: std::collections::HashSet<String> = graph
+            .all_nodes()
+            .into_iter()
+            .map(|n| n.location.file.to_string_lossy().replace('\\', "/"))
+            .collect();
+
+        let mut unchanged_files = 0usize;
+        let mut re_parsed_files = 0usize;
+
+        for file_path in files {
+            if !crate::ast::dispatcher::LanguageDispatcher::is_supported(file_path) {
+                continue;
+            }
+            let Ok(current_hash) = compute_file_xxhash64(file_path) else {
+                continue;
+            };
+            let norm_key = file_path.to_string_lossy().replace('\\', "/");
+
+            if stored_hashes.get(&norm_key) == Some(&current_hash)
+                && files_in_graph.contains(&norm_key)
+            {
+                unchanged_files += 1;
+                continue;
+            }
+
+            // Cache miss or file modified: evict stale nodes for this file and re-parse
+            graph.remove_nodes_for_file(file_path);
+            if let Ok(mut del_stmt) = conn.prepare("MATCH (n:ChronosNode {file: $file}) DETACH DELETE n") {
+                let _ = conn.execute(&mut del_stmt, vec![("file", kuzu::Value::String(norm_key.clone()))]);
+            }
+
+            if let Ok(parsed) = dispatcher.parse_file(file_path) {
+                graph.ingest_parsed_module(&parsed);
+                re_parsed_files += 1;
+
+                if let Ok(mut hash_stmt) = conn.prepare(
+                    "MERGE (f:ChronosFileHash {file: $file}) \
+                     ON CREATE SET f.xxhash64 = $hash \
+                     ON MATCH SET f.xxhash64 = $hash",
+                ) {
+                    let _ = conn.execute(
+                        &mut hash_stmt,
+                        vec![
+                            ("file", kuzu::Value::String(norm_key)),
+                            ("hash", kuzu::Value::String(current_hash)),
+                        ],
+                    );
+                }
+            }
+        }
+
+        if re_parsed_files > 0 {
+            graph.resolve_pending_calls_and_routes();
+            let _ = self.sync_from_graph(graph);
+        }
+
+        Ok(IncrementalSyncStats {
+            total_files: unchanged_files + re_parsed_files,
+            unchanged_files,
+            re_parsed_files,
+        })
+    }
+
+    /// Upsert a single file's `xxHash64` digest into `ChronosFileHash`.
+    pub fn upsert_file_hash(&self, file_norm: &str, hash: &str) -> Result<()> {
+        let conn = Connection::new(&self.db)
+            .context("Failed to open KuzuDB connection for file hash upsert")?;
+        if let Ok(mut hash_stmt) = conn.prepare(
+            "MERGE (f:ChronosFileHash {file: $file}) \
+             ON CREATE SET f.xxhash64 = $hash \
+             ON MATCH SET f.xxhash64 = $hash",
+        ) {
+            let _ = conn.execute(
+                &mut hash_stmt,
+                vec![
+                    ("file", kuzu::Value::String(file_norm.to_string())),
+                    ("hash", kuzu::Value::String(hash.to_string())),
+                ],
+            );
+        }
+        Ok(())
     }
 
     /// Query performance hotspots directly from KuzuDB.
@@ -546,6 +670,22 @@ pub struct CypherQueryResult {
     pub rows: Vec<Vec<serde_json::Value>>,
     pub total_rows: usize,
     pub truncated: bool,
+}
+
+/// Statistics returned by `sync_workspace_incremental` (Merkle `xxHash64` cache).
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct IncrementalSyncStats {
+    pub total_files: usize,
+    pub unchanged_files: usize,
+    pub re_parsed_files: usize,
+}
+
+/// Compute the 64-bit `xxHash64` hex digest of a file's raw bytes.
+pub fn compute_file_xxhash64(path: &Path) -> Result<String> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("Failed to read file for xxHash64: {}", path.display()))?;
+    let digest = xxhash_rust::xxh64::xxh64(&bytes, 0);
+    Ok(format!("{digest:016x}"))
 }
 
 /// Validate that a Cypher query is strictly read-only (`MATCH ... RETURN ...`).

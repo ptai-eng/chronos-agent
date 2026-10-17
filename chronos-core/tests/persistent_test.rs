@@ -297,3 +297,54 @@ fn kuzu_readonly_cypher_blocks_mutations() {
     );
 }
 
+#[test]
+fn kuzu_incremental_xxhash64_merkle_sync_skips_unchanged_and_evicts_modified() {
+    use chronos_core::ast::dispatcher::LanguageDispatcher;
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_dir = dir.path().join(".chronos").join("graph.kuzu");
+    std::fs::create_dir_all(db_dir.parent().unwrap()).unwrap();
+    let store = PersistentGraph::open(&db_dir).unwrap();
+
+    let file_a = dir.path().join("service_a.ts");
+    let file_b = dir.path().join("service_b.ts");
+    std::fs::write(&file_a, "export function oldHelper(x: number) { return x + 1; }\n").unwrap();
+    std::fs::write(&file_b, "export function stableFunc(y: number) { return y * 2; }\n").unwrap();
+
+    let files = vec![file_a.clone(), file_b.clone()];
+    let mut graph = ChronosGraph::new();
+    let mut dispatcher = LanguageDispatcher::new().unwrap();
+
+    // Pass 1: Cold cache -> both files parsed
+    let stats1 = store
+        .sync_workspace_incremental(&mut graph, &files, &mut dispatcher)
+        .unwrap();
+    assert_eq!(stats1.re_parsed_files, 2);
+    assert_eq!(stats1.unchanged_files, 0);
+    assert!(graph.all_nodes().iter().any(|n| n.name == "oldHelper"));
+
+    // Pass 2: Unchanged files -> 0 reparsed, 2 skipped via xxHash64 Merkle table
+    let stats2 = store
+        .sync_workspace_incremental(&mut graph, &files, &mut dispatcher)
+        .unwrap();
+    assert_eq!(stats2.re_parsed_files, 0);
+    assert_eq!(stats2.unchanged_files, 2);
+
+    // Pass 3: Modify file_a (rename oldHelper -> newHelper) -> 1 reparsed, 1 skipped, oldHelper evicted
+    std::fs::write(&file_a, "export function newHelper(x: number) { return x + 2; }\n").unwrap();
+    let stats3 = store
+        .sync_workspace_incremental(&mut graph, &files, &mut dispatcher)
+        .unwrap();
+    assert_eq!(stats3.re_parsed_files, 1);
+    assert_eq!(stats3.unchanged_files, 1);
+    assert!(
+        !graph.all_nodes().iter().any(|n| n.name == "oldHelper"),
+        "Stale symbol oldHelper must be evicted from in-memory graph"
+    );
+    assert!(
+        graph.all_nodes().iter().any(|n| n.name == "newHelper"),
+        "New symbol newHelper must be present"
+    );
+}
+
+

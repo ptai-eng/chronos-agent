@@ -14,6 +14,7 @@ pub mod query;
 pub mod schema;
 pub mod store;
 pub mod persistent;
+pub mod git_coupling;
 
 pub use schema::{ChronosGraph, EdgeKind, NodeId, NodeKind};
 pub use persistent::PersistentGraph;

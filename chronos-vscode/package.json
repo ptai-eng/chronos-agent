@@ -2,7 +2,7 @@
   "name": "chronos-agent",
   "displayName": "CHRONOS Agent",
   "description": "4D Living Code Intelligence Harness — Real-time blast-radius + mutation score",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": "ptai-eng",
   "engines": {
     "vscode": "^1.90.0"

@@ -265,6 +265,29 @@ impl<'g> ImpactAnalyzer<'g> {
             }
         }
 
+        // Zone 2.5: 5th-Dimension Git Temporal Co-Change Coupling (EdgeKind::CoChangesWith)
+        let co_change_partners = self.graph.co_change_partners_of(changed_node_id);
+        for (partner, confidence_pct) in co_change_partners {
+            let id_str = partner.id.to_string();
+            if seen.contains(&id_str) {
+                continue;
+            }
+            seen.insert(id_str);
+            let score = ((confidence_pct as f32) / 100.0 * 0.65).clamp(0.30, 0.65);
+            affected_nodes.push(AffectedNode {
+                node_name: partner.name.clone(),
+                file: partner.location.file.to_string_lossy().to_string(),
+                line: partner.location.start_line,
+                risk_zone: if confidence_pct >= 75 {
+                    RiskZone::High
+                } else {
+                    RiskZone::Medium
+                },
+                reason: format!("Git temporal co-change partner ({}% confidence)", confidence_pct),
+                impact_score: score,
+            });
+        }
+
         // Zone 3: Performance risk from changed node itself (incorporating PageRank)
         let self_impact = compute_node_impact(changed_node, contract_breaking, pagerank_score);
 

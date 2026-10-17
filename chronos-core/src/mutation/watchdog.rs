@@ -87,10 +87,38 @@ pub async fn run_mutant_test(
     
     std::fs::write(original_file, mutant_source)?;
 
+    run_mutant_test_with_env(0, test_files, config, working_dir, start).await
+}
+
+/// Run a test command in an already-prepared super-mutant workspace by setting `CHRONOS_MUTANT_ID`.
+pub async fn run_super_mutant_id(
+    mutant_id: u64,
+    test_files: &[&str],
+    config: &WatchdogConfig,
+    working_dir: &Path,
+) -> Result<MutantTestResult> {
+    let start = std::time::Instant::now();
+    run_mutant_test_with_env(mutant_id, test_files, config, working_dir, start).await
+}
+
+async fn run_mutant_test_with_env(
+    mutant_id: u64,
+    test_files: &[&str],
+    config: &WatchdogConfig,
+    working_dir: &Path,
+    start: std::time::Instant,
+) -> Result<MutantTestResult> {
     let result = timeout(
         Duration::from_millis(config.timeout_ms),
-        execute_test_command(&config.test_runner, &config.test_args, test_files, working_dir)
-    ).await;
+        execute_test_command(
+            &config.test_runner,
+            &config.test_args,
+            test_files,
+            working_dir,
+            if mutant_id > 0 { Some(mutant_id) } else { None },
+        ),
+    )
+    .await;
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -99,7 +127,7 @@ pub async fn run_mutant_test(
             // Non-zero exit = test failed = mutant KILLED (good!)
             let killed = exit_code != 0;
             Ok(MutantTestResult {
-                mutant_id: 0, // Set by caller
+                mutant_id,
                 killed,
                 timed_out: false,
                 exit_code: Some(exit_code),
@@ -111,7 +139,7 @@ pub async fn run_mutant_test(
             warn!("Test execution error: {}", e);
             // Treat execution errors as killed (defensive)
             Ok(MutantTestResult {
-                mutant_id: 0,
+                mutant_id,
                 killed: true,
                 timed_out: false,
                 exit_code: None,
@@ -123,7 +151,7 @@ pub async fn run_mutant_test(
             // Timeout — treat as killed (infinite loop prevention)
             warn!("Mutant test timed out after {}ms", config.timeout_ms);
             Ok(MutantTestResult {
-                mutant_id: 0,
+                mutant_id,
                 killed: true,
                 timed_out: true,
                 exit_code: None,
@@ -140,11 +168,15 @@ async fn execute_test_command(
     args: &[String],
     test_files: &[&str],
     working_dir: &Path,
+    mutant_id: Option<u64>,
 ) -> Result<(i32, String)> {
     let mut cmd = tokio::process::Command::new(runner);
     cmd.args(args);
     cmd.args(test_files);
     cmd.current_dir(working_dir);
+    if let Some(id) = mutant_id {
+        cmd.env("CHRONOS_MUTANT_ID", id.to_string());
+    }
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 

@@ -23,11 +23,13 @@ pub fn hydrate_graph(graph: &mut ChronosGraph, session: &TelemetrySession) -> Hy
         .map(|f| (f.function_name.as_str(), f))
         .collect();
 
-    // Get all function node IDs that need hydration
-    let node_ids: Vec<NodeId> = {
-        let fn_nodes = graph.nodes_by_kind(&NodeKind::Function);
-        fn_nodes.iter().map(|n| n.id.clone()).collect()
-    };
+    // Get all executable node IDs (Function, ApiRoute) that can be hydrated
+    let node_ids: Vec<NodeId> = graph
+        .all_nodes()
+        .into_iter()
+        .filter(|n| matches!(n.kind, NodeKind::Function | NodeKind::ApiRoute))
+        .map(|n| n.id.clone())
+        .collect();
 
     let _total_session_cpu = session.functions.iter().map(|f| f.cpu_self_us).sum::<u64>().max(1);
 
@@ -39,9 +41,14 @@ pub fn hydrate_graph(graph: &mut ChronosGraph, session: &TelemetrySession) -> Hy
         // Try to find matching telemetry data
         let telem_data = telem_lookup.get(node_name.as_str())
             .or_else(|| {
-                // Suffix match: "getUser" matches "UserService::getUser"
+                // Suffix match: "getUser" matches "UserService::getUser", "UserService.getUser", or "pkg/user.getUser"
                 telem_lookup.iter()
-                    .find(|(k, _)| k.ends_with(&format!("::{}", node_name)) || **k == node_name)
+                    .find(|(k, _)| {
+                        **k == node_name
+                            || k.ends_with(&format!("::{}", node_name))
+                            || k.ends_with(&format!(".{}", node_name))
+                            || k.ends_with(&format!("/{}", node_name))
+                    })
                     .map(|(_, v)| v)
             });
 

@@ -149,6 +149,17 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Hydrate the 4D Knowledge Graph from an offline profiler artifact (.cpuprofile, Speedscope, Folded Flamegraph, OTLP JSON)
+    Hydrate {
+        /// Path to the offline profile file
+        profile: PathBuf,
+        /// Optional files or directories to index before hydrating
+        #[arg(short, long)]
+        files: Vec<PathBuf>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[tokio::main]
@@ -215,7 +226,9 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
+                graph.resolve_pending_calls_and_routes();
             }
+            chronos_core::graph::git_coupling::ingest_git_co_changes(&mut graph, &workspace, 200);
 
             let analyzer = ImpactAnalyzer::new(&graph);
             let all_nodes = graph.all_nodes();
@@ -382,10 +395,48 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        Commands::Hydrate { profile, files, json } => {
+            use chronos_core::{
+                graph::persistent::PersistentGraph,
+                telemetry::{hydration::hydrate_graph, profile_loader::load_profile_from_file},
+            };
+            let profile_abs = if profile.is_absolute() {
+                profile
+            } else {
+                workspace.join(&profile)
+            };
+            let session = load_profile_from_file(&profile_abs)?;
+            let mut graph = build_cli_graph(&workspace, &files)?;
+            let report = hydrate_graph(&mut graph, &session);
+
+            let db_path = workspace.join(".chronos").join("graph.kuzu");
+            if let Some(parent) = db_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(db) = PersistentGraph::open(&db_path) {
+                let _ = db.sync_from_graph(&graph);
+            }
+
+            if json {
+                let out = serde_json::json!({
+                    "backend": session.backend,
+                    "total_duration_ms": session.total_duration_ms,
+                    "total_profiled_functions": report.total_profiled,
+                    "hydrated_nodes": report.hydrated_count,
+                    "cold_nodes": report.cold_count,
+                    "bottlenecks_found": report.bottlenecks_found,
+                });
+                println!("{}", serde_json::to_string_pretty(&out)?);
+            } else {
+                println!("{}", session.summary());
+                println!("{}", report);
+            }
+            Ok(())
+        }
     }
 }
 
-fn build_cli_graph(workspace: & std::path::Path, explicit_files: &[PathBuf]) -> Result<chronos_core::graph::schema::ChronosGraph> {
+fn build_cli_graph(workspace: &std::path::Path, explicit_files: &[PathBuf]) -> Result<chronos_core::graph::schema::ChronosGraph> {
     use chronos_core::{
         ast::dispatcher::LanguageDispatcher,
         graph::schema::ChronosGraph,
@@ -414,6 +465,8 @@ fn build_cli_graph(workspace: & std::path::Path, explicit_files: &[PathBuf]) -> 
             }
         }
     }
+    graph.resolve_pending_calls_and_routes();
+    chronos_core::graph::git_coupling::ingest_git_co_changes(&mut graph, workspace, 200);
     Ok(graph)
 }
 

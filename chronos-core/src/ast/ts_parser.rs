@@ -114,6 +114,11 @@ impl TypeScriptParser {
 
         // Walk the AST and extract symbols
         self.extract_symbols(root_node, source_bytes, &mut module, file_path, None, None);
+        crate::ast::polyglot_parser::extract_routes_and_http_calls_from_source(
+            file_path,
+            source,
+            &mut module,
+        );
 
         debug!(
             "Parsed {}: {} functions, {} classes, {} routes, {} tests, {} calls ({} unresolved)",

@@ -5,7 +5,7 @@
 //! Automatically indexes supported workspace files if the graph is currently empty or `auto_index` is true.
 
 use crate::protocol::CallToolResult;
-use crate::state::SharedState;
+use crate::state::{ChronosState, SharedState};
 use chronos_core::{
     ast::dispatcher::LanguageDispatcher,
     graph::query::GraphQueryEngine,
@@ -28,19 +28,28 @@ pub async fn handle_get_architecture(state: SharedState, params: Option<Value>) 
 
     {
         let mut st = state.write().await;
-        if auto_index && st.graph.node_count() == 0 {
+        if auto_index {
             let root = st.workspace_root.clone();
             if let Ok(mut dispatcher) = LanguageDispatcher::new() {
                 let mut files = Vec::new();
                 collect_supported_files(&root, &mut files, 300);
-                for f in files {
-                    if let Ok(parsed) = dispatcher.parse_file(&f) {
-                        st.graph.ingest_parsed_module(&parsed);
+                // Split borrow of st.db and st.graph
+                let ChronosState {
+                    ref mut graph,
+                    ref db,
+                    ..
+                } = *st;
+                if let Some(ref db_inst) = db {
+                    let _ = db_inst.sync_workspace_incremental(graph, &files, &mut dispatcher);
+                } else if graph.node_count() == 0 {
+                    for f in &files {
+                        if let Ok(parsed) = dispatcher.parse_file(f) {
+                            graph.ingest_parsed_module(&parsed);
+                        }
                     }
+                    graph.resolve_pending_calls_and_routes();
                 }
-                if let Some(ref db) = st.db {
-                    let _ = db.sync_from_graph(&st.graph);
-                }
+                chronos_core::graph::git_coupling::ingest_git_co_changes(graph, &root, 200);
             }
         }
     }

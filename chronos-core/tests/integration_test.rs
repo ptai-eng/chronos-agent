@@ -295,3 +295,136 @@ fn test_verify_session() {
     let (_rs_nodes, rs_edges) = rs_graph.ingest_parsed_module(&rs_parsed);
     assert!(rs_edges >= 2, "Rust should link verify_session->hash_token and test_verify_session->verify_session");
 }
+
+#[test]
+fn v1_4_cross_boundary_frontend_backend_route_stitching() {
+    use chronos_core::ast::{py_parser::PythonParser, ts_parser::TypeScriptParser};
+
+    // Parse Frontend TS FIRST (reverse order of definition)
+    let mut ts = TypeScriptParser::new().expect("TS parser");
+    let ts_src = r#"
+export async function loadCustomerDashboard(userId: string) {
+    const res = await fetch(`/api/v1/users/${userId}`);
+    return res;
+}
+"#;
+    let ts_mod = ts
+        .parse_source(&PathBuf::from("frontend/dashboard.ts"), ts_src)
+        .expect("parse ts");
+
+    // Parse Backend Python FastAPI SECOND
+    let mut py = PythonParser::new().expect("Py parser");
+    let py_src = r#"
+@app.get("/api/v1/users/{id}")
+def get_user_endpoint(id: str):
+    return {"id": id}
+"#;
+    let py_mod = py
+        .parse_str(py_src, &PathBuf::from("backend/routes.py"))
+        .expect("parse py");
+
+    let mut graph = ChronosGraph::new();
+    let (_ts_nodes, ts_edges) = graph.ingest_parsed_module(&ts_mod);
+    assert_eq!(ts_edges, 0, "Route not yet in graph when TS is ingested first");
+    let (_py_nodes, stitched) = graph.ingest_parsed_module(&py_mod);
+    assert!(stitched >= 1, "Should stitch deferred cross-language HTTP route calls");
+
+    let route_node = graph
+        .nodes_by_kind(&NodeKind::ApiRoute)
+        .into_iter()
+        .find(|n| n.name.contains("/api/v1/users/"))
+        .expect("Backend ApiRoute /api/v1/users/{id} should exist");
+
+    let callers = graph.callers_of(&route_node.id);
+    assert!(
+        callers.iter().any(|c| c.name == "loadCustomerDashboard"),
+        "Frontend function loadCustomerDashboard should be linked as a caller of backend ApiRoute"
+    );
+}
+
+#[test]
+fn v1_4_git_temporal_co_change_coupling_surfaces_in_blast_radius() {
+    use chronos_core::graph::schema::{ChronosEdge, ChronosNode, EdgeKind, NodeId, SourceLocation};
+
+    let mut graph = ChronosGraph::new();
+    let file_a_id = NodeId::new("src/schema.sql", "schema.sql", &NodeKind::File);
+    let file_b_id = NodeId::new("src/models/user.rs", "user.rs", &NodeKind::File);
+
+    graph.add_node(ChronosNode::new(
+        file_a_id.clone(),
+        NodeKind::File,
+        "schema.sql",
+        "src/schema.sql",
+        SourceLocation {
+            file: PathBuf::from("src/schema.sql"),
+            start_line: 1,
+            start_col: 0,
+            end_line: 20,
+            end_col: 0,
+        },
+    ));
+    graph.add_node(ChronosNode::new(
+        file_b_id.clone(),
+        NodeKind::File,
+        "user.rs",
+        "src/models/user.rs",
+        SourceLocation {
+            file: PathBuf::from("src/models/user.rs"),
+            start_line: 1,
+            start_col: 0,
+            end_line: 50,
+            end_col: 0,
+        },
+    ));
+
+    let mut edge = ChronosEdge::new(EdgeKind::CoChangesWith);
+    edge.call_site_line = Some(85); // 85% historical co-change confidence
+    graph.add_edge(&file_a_id, &file_b_id, edge).unwrap();
+
+    let analyzer = ImpactAnalyzer::new(&graph);
+    let report = analyzer.analyze(&file_a_id, false);
+    assert!(
+        report
+            .affected_nodes
+            .iter()
+            .any(|n| n.node_name == "user.rs" && n.reason.contains("85% confidence")),
+        "BlastRadiusReport should include git co-change partner user.rs with 85% confidence"
+    );
+}
+
+#[test]
+fn v1_4_offline_telemetry_hydration_completes_coverage() {
+    use chronos_core::telemetry::{hydration::hydrate_graph, profile_loader::parse_profile_str};
+
+    let mut parser = TypeScriptParser::new().unwrap();
+    let src = r#"
+export function verifyJwt(token: string): boolean {
+    return token.length > 10;
+}
+export function handleLogin(token: string): boolean {
+    return verifyJwt(token);
+}
+"#;
+    let parsed = parser.parse_source(&PathBuf::from("src/auth.ts"), src).unwrap();
+    let mut graph = ChronosGraph::new();
+    graph.ingest_parsed_module(&parsed);
+
+    let folded = "main;handleLogin;verifyJwt 250\nmain;handleLogin 50\n";
+    let session = parse_profile_str(folded).expect("Should parse folded stacks");
+    let hydration = hydrate_graph(&mut graph, &session);
+    assert_eq!(hydration.hydrated_count, 2);
+    assert!(graph.is_hydrated());
+
+    let verify_id = graph
+        .nodes_by_kind(&NodeKind::Function)
+        .into_iter()
+        .find(|n| n.name == "verifyJwt")
+        .unwrap()
+        .id
+        .clone();
+    let analyzer = ImpactAnalyzer::new(&graph);
+    let report = analyzer.analyze(&verify_id, false);
+    assert!(report.coverage.telemetry_hydrated);
+    assert_eq!(report.coverage.completeness, "complete");
+}
+

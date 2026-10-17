@@ -69,9 +69,17 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
     let unresolved_count = parsed.unresolved_call_sites;
 
     let mut st = state.write().await;
+    st.graph.remove_nodes_for_file(&abs_path);
     let (inserted, edges_added) = st.graph.ingest_parsed_module(&parsed);
 
     if let Some(ref db) = st.db {
+        if let Ok(hash) = chronos_core::graph::persistent::compute_file_xxhash64(&abs_path) {
+            let norm = abs_path
+                .to_string_lossy()
+                .trim_start_matches(r"\\?\")
+                .replace('\\', "/");
+            let _ = db.upsert_file_hash(&norm, &hash);
+        }
         if let Err(e) = db.sync_from_graph(&st.graph) {
             warn!("KuzuDB sync failed: {}", e);
         }

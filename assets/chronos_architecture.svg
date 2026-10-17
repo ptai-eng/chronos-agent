@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" width="100%" height="100%" role="img" aria-labelledby="arch-title arch-desc">
-  <title id="arch-title">CHRONOS-AGENT v1.3 — 4D Living Code Intelligence Architecture</title>
-  <desc id="arch-desc">Four-tier system schematic showing 7-Language Tree-sitter AST and Runtime Telemetry feeding the 4D Knowledge Graph (Petgraph + KuzuDB Read-Only Cypher), powering the Mutation Arena, Semantic Contract Broker, and Blast-Radius Engine exposed over 9 MCP Tools and CLI.</desc>
+  <title id="arch-title">CHRONOS-AGENT v1.4 — 5D Living Code Intelligence Architecture</title>
+  <desc id="arch-desc">Four-tier system schematic showing 7-Language Tree-sitter AST, Cross-Boundary Route Stitching, Git Temporal Co-Change Coupling, and Offline/Live Runtime Telemetry feeding the 5D Knowledge Graph (Petgraph + KuzuDB Incremental Merkle Cache), powering the Super-Mutant Arena, Semantic Contract Broker, and Blast-Radius Engine exposed over 10 MCP Tools and CLI.</desc>
   <defs>
     <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="2" cy="2" r="1" fill="rgba(45,49,66,0.08)"/>
@@ -22,16 +22,16 @@
   <rect x="4" y="4" width="1112" height="552" rx="6" fill="none" stroke="rgba(45,49,66,0.14)" stroke-width="1"/>
 
   <!-- Header -->
-  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" letter-spacing="0.14em">SYSTEM ARCHITECTURE // CHRONOS-AGENT V1.3</text>
-  <text x="40" y="64" fill="#2d3142" font-size="24" font-weight="600" font-family="Georgia, 'Instrument Serif', serif">4D Living Code Intelligence &amp; Blast-Radius Harness</text>
+  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" letter-spacing="0.14em">SYSTEM ARCHITECTURE // CHRONOS-AGENT V1.4</text>
+  <text x="40" y="64" fill="#2d3142" font-size="24" font-weight="600" font-family="Georgia, 'Instrument Serif', serif">5D Living Code Intelligence &amp; Blast-Radius Harness</text>
   <line x1="40" y1="80" x2="1080" y2="80" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
 
   <!-- Left Rail Layer Labels -->
   <text x="40" y="124" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">01 / INGESTION</text>
-  <text x="40" y="140" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Static AST + Live Runtime</text>
+  <text x="40" y="140" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">AST + Git + Telemetry</text>
 
-  <text x="40" y="236" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">02 / 4D CORE</text>
-  <text x="40" y="252" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Topology &amp; Persistence</text>
+  <text x="40" y="236" fill="#eb6c36" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">02 / 5D CORE</text>
+  <text x="40" y="252" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Topology &amp; Merkle Cache</text>
 
   <text x="40" y="356" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.1em">03 / PILLARS</text>
   <text x="40" y="372" fill="#7a8399" font-size="11" font-family="-apple-system, 'Geist', sans-serif">Verification &amp; Risk Engines</text>
@@ -48,7 +48,7 @@
   <line x1="600" y1="240" x2="696" y2="240" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
   <line x1="696" y1="256" x2="600" y2="256" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
   <rect x="620" y="218" width="56" height="14" rx="2" fill="#f5f5f5"/>
-  <text x="648" y="228" fill="#eb6c36" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">MERGE</text>
+  <text x="648" y="228" fill="#eb6c36" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">XXHASH64</text>
 
   <!-- Petgraph -> 3 Analytical Pillars (Fanned attach points on bottom edge: x=384, x=480, x=576) -->
   <path d="M 384 280 L 384 296 Q 384 304 376 304 L 328 304 Q 320 304 320 312 L 320 328" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -64,39 +64,39 @@
   <!-- Box 1A: Multi-Language AST Parser -->
   <rect x="220" y="96" width="320" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
   <rect x="232" y="104" width="44" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
-  <text x="254" y="114" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">AST</text>
-  <text x="380" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Polyglot Tree-sitter Dispatcher (7 Langs)</text>
-  <text x="380" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">TS / Py / Rs / Go / C / C++ / Java • O(N²) Loops</text>
+  <text x="254" y="114" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">AST+GIT</text>
+  <text x="380" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Polyglot AST + Route Stitcher + Git Coupling</text>
+  <text x="380" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">7 Langs • HTTP Route Bridge • Git Co-Changes</text>
 
   <!-- Box 1B: Runtime Telemetry Ingestor -->
   <rect x="620" y="96" width="320" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
   <rect x="632" y="104" width="60" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
   <text x="662" y="114" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">RUNTIME</text>
-  <text x="780" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Live Telemetry &amp; Profiling Overlay</text>
-  <text x="780" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">V8 CDP Inspector + Linux eBPF • p50/p99 CPU%</text>
+  <text x="780" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Live &amp; Offline Telemetry Hydrator</text>
+  <text x="780" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">V8 CDP • Speedscope • Flamegraph • OTLP • eBPF</text>
 
   <!-- ================= ROW 2: 4D CORE GRAPH ================= -->
   <!-- Box 2A: Focal 4D Knowledge Graph (Coral Accent) -->
   <rect x="336" y="208" width="264" height="72" rx="6" fill="#fdf1ec" stroke="#eb6c36" stroke-width="1.5"/>
   <rect x="348" y="216" width="52" height="14" rx="2" fill="#eb6c36"/>
-  <text x="374" y="226" fill="#ffffff" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">4D CORE</text>
+  <text x="374" y="226" fill="#ffffff" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">5D CORE</text>
   <text x="468" y="244" fill="#2d3142" font-size="14" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">ChronosGraph (Petgraph)</text>
-  <text x="468" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PageRank • BM25 • Label Communities</text>
+  <text x="468" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PageRank • BM25 • 2-Pass Route Stitch</text>
 
   <!-- Box 2B: KuzuDB Persistent Graph -->
   <rect x="696" y="208" width="264" height="72" rx="6" fill="#ededef" stroke="#4f5d75" stroke-width="1"/>
   <rect x="708" y="216" width="48" height="14" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8"/>
   <text x="732" y="226" fill="#4f5d75" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CYPHER</text>
-  <text x="828" y="244" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Embedded KuzuDB Cypher Engine</text>
-  <text x="828" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Read-Only Cypher • 4 Edge Tables</text>
+  <text x="828" y="244" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">KuzuDB Incremental Merkle Cache</text>
+  <text x="828" y="264" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">xxHash64 File Cache • 5 Edge Tables</text>
 
   <!-- ================= ROW 3: ANALYTICAL PILLARS ================= -->
   <!-- Box 3A: Mutation Arena -->
   <rect x="200" y="328" width="256" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
   <rect x="212" y="336" width="56" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
   <text x="240" y="346" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PILLAR 2</text>
-  <text x="328" y="364" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Mutation Testing Arena</text>
-  <text x="328" y="384" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Zero-Copy Symlink Sandbox • 80/90% Gate</text>
+  <text x="328" y="364" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Super-Mutant Testing Arena</text>
+  <text x="328" y="384" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Single-Compile Env Switch • Symlink Sandbox</text>
 
   <!-- Box 3B: Semantic Contract Broker -->
   <rect x="484" y="328" width="256" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
@@ -110,33 +110,33 @@
   <rect x="780" y="336" width="56" height="14" rx="2" fill="#eb6c36"/>
   <text x="808" y="346" fill="#ffffff" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">PILLAR 4</text>
   <text x="916" y="364" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Blast-Radius &amp; Uncertainty Matrix</text>
-  <text x="916" y="384" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CoverageReport • CI Bounds • Residual Unknowns</text>
+  <text x="916" y="384" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Git Co-Changes • CI Bounds • Residual Unknowns</text>
 
   <!-- ================= ROW 4: UNIFIED INTERFACE LAYER ================= -->
   <!-- Box 4A: MCP Server -->
   <rect x="260" y="440" width="380" height="56" rx="6" fill="#ffffff" stroke="#2e5aa8" stroke-width="1.2"/>
   <rect x="272" y="448" width="56" height="14" rx="2" fill="rgba(46,90,168,0.1)" stroke="#2e5aa8" stroke-width="0.8"/>
   <text x="300" y="458" fill="#2e5aa8" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">JSON-RPC</text>
-  <text x="450" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos-mcp Server (9 Tools • 9 AI Clients)</text>
-  <text x="450" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Cypher • BM25 • Snippet • Arch • Provenance</text>
+  <text x="450" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos-mcp Server (10 Tools • 9 AI Clients)</text>
+  <text x="450" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Cypher • BM25 • Snippet • Arch • Hydrate</text>
 
   <!-- Box 4B: CLI & VS Code Extension -->
   <rect x="680" y="440" width="340" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
   <rect x="692" y="448" width="44" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
   <text x="714" y="458" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CLI/UI</text>
   <text x="850" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos CLI &amp; VS Code HUD Extension</text>
-  <text x="850" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">audit • arch • search • snippet • query • diff</text>
+  <text x="850" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">audit • arch • search • snippet • query • hydrate</text>
 
   <!-- Bottom Legend Strip -->
   <line x1="40" y1="516" x2="1080" y2="516" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
   <text x="40" y="536" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.14em">LEGEND</text>
   <rect x="112" y="528" width="12" height="8" rx="2" fill="#fdf1ec" stroke="#eb6c36" stroke-width="1.2"/>
-  <text x="132" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Focal 4D Engine (≤2)</text>
+  <text x="132" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Focal 5D Engine (≤2)</text>
   <rect x="268" y="528" width="12" height="8" rx="2" fill="#ededef" stroke="#4f5d75" stroke-width="1"/>
   <text x="288" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Persistent Store (KuzuDB)</text>
   <line x1="440" y1="532" x2="464" y2="532" stroke="#eb6c36" stroke-width="1.4"/>
   <text x="472" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Primary Telemetry / Risk Flow</text>
   <line x1="652" y1="532" x2="676" y2="532" stroke="#2e5aa8" stroke-width="1.4"/>
   <text x="684" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">MCP / Developer Interface</text>
-  <text x="1080" y="536" fill="#7a8399" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">101/101 TESTS PASSING • RUST WORKSPACE</text>
+  <text x="1080" y="536" fill="#7a8399" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">111/111 TESTS PASSING • RUST WORKSPACE</text>
 </svg>

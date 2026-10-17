@@ -1,4 +1,4 @@
-//! # Tools module — all 9 CHRONOS MCP tools
+//! # Tools module — all 10 CHRONOS MCP tools
 
 pub mod analyze_file;
 pub mod blast_radius;
@@ -6,6 +6,7 @@ pub mod contract_status;
 pub mod get_architecture;
 pub mod get_snippet;
 pub mod hotspots;
+pub mod hydrate_telemetry;
 pub mod mutation_gate;
 pub mod query_graph;
 pub mod search_graph;
@@ -20,7 +21,7 @@ pub fn all_tools() -> Vec<McpTool> {
             name: "chronos_analyze_file",
             description: "Parse a source file (.ts, .tsx, .js, .py, .rs, .go, .c, .cpp, .java) \
                           with CHRONOS's polyglot AST engine and insert all symbols, call edges, \
-                          test edges, and loop/complexity metrics into the 4D Knowledge Graph.",
+                          cross-language HTTP routes, test edges, and loop/complexity metrics into the 4D Knowledge Graph.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -58,8 +59,8 @@ pub fn all_tools() -> Vec<McpTool> {
             name: "chronos_blast_radius",
             description: "Analyze the blast-radius (change impact) of modifying a specific \
                           function or symbol. Returns a risk zone (SAFE/MEDIUM/HIGH/CRITICAL), \
-                          PageRank centrality, confidence interval, coverage completeness, and \
-                          residual unknowns.",
+                          PageRank centrality, Git temporal co-change partners, confidence interval, \
+                          coverage completeness, and residual unknowns.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -133,7 +134,7 @@ pub fn all_tools() -> Vec<McpTool> {
                           Every ChronosNode has properties: id, name, kind, file, start_line, end_line, cognitive_load, \
                           cyclomatic, fan_in, fan_out, param_count, sloc, loop_count, loop_depth, transitive_loop_depth, \
                           linear_scan_in_loop, alloc_in_loop, is_recursive, is_hydrated, exec_time_p50, exec_time_p99, \
-                          invocation_count, cpu_percent, is_hot_path, is_bottleneck. Relationship tables: CALLS, CONTAINS, TESTS, IMPORTS.",
+                          invocation_count, cpu_percent, is_hot_path, is_bottleneck. Relationship tables: CALLS, CONTAINS, TESTS, IMPORTS, CO_CHANGES_WITH.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -225,8 +226,27 @@ pub fn all_tools() -> Vec<McpTool> {
                     },
                     "auto_index": {
                         "type": "boolean",
-                        "description": "Automatically scan and index workspace files if the graph is currently empty (default: true)",
+                        "description": "Automatically scan and incrementally index workspace files (default: true)",
                         "default": true
+                    }
+                },
+                "required": []
+            }),
+        },
+        McpTool {
+            name: "chronos_hydrate_telemetry",
+            description: "Hydrate the 4th Dimension (runtime telemetry) of the ChronosGraph from an offline profiler artifact \
+                          (V8 .cpuprofile JSON, Speedscope/py-spy JSON, Folded Stack Flamegraph text, or OpenTelemetry OTLP trace JSON).",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "profile_path": {
+                        "type": "string",
+                        "description": "Path to the offline profile file (.cpuprofile, .speedscope.json, .folded, .otlp.json)"
+                    },
+                    "profile_content": {
+                        "type": "string",
+                        "description": "Optional inline profile content string (alternative to profile_path)"
                     }
                 },
                 "required": []
@@ -241,6 +261,7 @@ pub use contract_status::handle_contract_status;
 pub use get_architecture::handle_get_architecture;
 pub use get_snippet::handle_get_snippet;
 pub use hotspots::handle_query_hotspots;
+pub use hydrate_telemetry::handle_hydrate_telemetry;
 pub use mutation_gate::handle_mutation_gate;
 pub use query_graph::handle_query_graph;
 pub use search_graph::handle_search_graph;

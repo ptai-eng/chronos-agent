@@ -233,6 +233,7 @@ impl GoParser {
         let file_str = file_path.to_string_lossy().to_string();
 
         self.walk_go(tree.root_node(), bytes, &mut module, file_path, &file_str, None);
+        extract_routes_and_http_calls_from_source(file_path, source, &mut module);
         Ok(module)
     }
 
@@ -377,6 +378,7 @@ impl CppParser {
         let file_str = file_path.to_string_lossy().to_string();
 
         self.walk_cpp(tree.root_node(), bytes, &mut module, file_path, &file_str, None);
+        extract_routes_and_http_calls_from_source(file_path, source, &mut module);
         Ok(module)
     }
 
@@ -555,6 +557,7 @@ impl JavaParser {
         let file_str = file_path.to_string_lossy().to_string();
 
         self.walk_java(tree.root_node(), bytes, &mut module, file_path, &file_str, None);
+        extract_routes_and_http_calls_from_source(file_path, source, &mut module);
         Ok(module)
     }
 
@@ -710,6 +713,156 @@ fn count_sloc(source: &str) -> usize {
         .map(|l| l.trim())
         .filter(|l| !l.is_empty() && !l.starts_with("//") && !l.starts_with("/*") && !l.starts_with('*'))
         .count()
+}
+
+/// Universal Cross-Boundary HTTP Route & Client Call Extractor across all 7 language families.
+///
+/// 1. Detects backend route decorators/registrations (`@app.get`, `@router.post`, `#[get]`,
+///    `@GetMapping`, `http.HandleFunc`, `r.GET`, `.route(...)`) and tags handler functions
+///    with `contract_signature = Some("ROUTE::/path")`.
+/// 2. Detects client HTTP invocations (`fetch(...)`, `axios.get/post(...)`, `requests.get/post(...)`,
+///    `http.Get/Post(...)`, `client.get/post(...)`) and emits `CallRef { callee_name: "ROUTE::/path" }`
+///    so `ChronosGraph` stitches cross-language Frontend <-> Backend edges.
+pub fn extract_routes_and_http_calls_from_source(
+    file_path: &Path,
+    source: &str,
+    module: &mut ParsedModule,
+) {
+    let file_str = file_path.to_string_lossy().to_string();
+
+    for (idx, raw_line) in source.lines().enumerate() {
+        let line_num = idx + 1;
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with("//") || line.starts_with('#') && !line.starts_with("#[") {
+            continue;
+        }
+
+        // A. Backend Decorator / Attribute Route Definitions
+        let is_route_decorator = line.starts_with("@app.")
+            || line.starts_with("@router.")
+            || line.starts_with("@bp.")
+            || line.starts_with("@blueprint.")
+            || line.starts_with("#[get(")
+            || line.starts_with("#[post(")
+            || line.starts_with("#[put(")
+            || line.starts_with("#[delete(")
+            || line.starts_with("#[patch(")
+            || line.starts_with("@GetMapping")
+            || line.starts_with("@PostMapping")
+            || line.starts_with("@PutMapping")
+            || line.starts_with("@DeleteMapping")
+            || line.starts_with("@RequestMapping");
+
+        if is_route_decorator {
+            if let Some(route_path) = extract_first_route_literal(line) {
+                for func in &mut module.functions {
+                    if func.location.start_line >= line_num.saturating_sub(1)
+                        && func.location.start_line <= line_num + 5
+                    {
+                        func.contract_signature = Some(format!("ROUTE::{route_path}"));
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+
+        // B. Backend Router Call Registrations (Express, Axum, Gin, Go net/http)
+        let is_route_registration = line.contains(".route(")
+            || line.contains("HandleFunc(")
+            || line.contains("app.get(")
+            || line.contains("app.post(")
+            || line.contains("app.put(")
+            || line.contains("app.delete(")
+            || line.contains("router.get(")
+            || line.contains("router.post(")
+            || line.contains(".GET(")
+            || line.contains(".POST(");
+
+        if is_route_registration {
+            if let Some(route_path) = extract_first_route_literal(line) {
+                let route_name = format!("ROUTE {route_path}");
+                let route_id = NodeId::new(&file_str, &route_name, &NodeKind::ApiRoute);
+                if !module.api_routes.iter().any(|r| r.id == route_id) {
+                    let mut rnode = ChronosNode::new(
+                        route_id,
+                        NodeKind::ApiRoute,
+                        &route_name,
+                        format!("{file_str}::{route_name}"),
+                        SourceLocation {
+                            file: file_path.to_path_buf(),
+                            start_line: line_num,
+                            start_col: 0,
+                            end_line: line_num,
+                            end_col: line.len(),
+                        },
+                    );
+                    rnode.contract_signature = Some(format!("ROUTE::{route_path}"));
+                    module.api_routes.push(rnode);
+                }
+                for func in &mut module.functions {
+                    if line.contains(&func.name) {
+                        func.contract_signature = Some(format!("ROUTE::{route_path}"));
+                        module.call_refs.push(CallRef {
+                            caller_name: route_name.clone(),
+                            callee_name: func.name.clone(),
+                            call_site_line: line_num,
+                        });
+                    }
+                }
+            }
+        }
+
+        // C. Client / Frontend Outbound HTTP Calls
+        let is_http_client_call = line.contains("fetch(")
+            || line.contains("axios.")
+            || line.contains("requests.")
+            || line.contains("httpx.")
+            || line.contains("http.Get(")
+            || line.contains("http.Post(")
+            || line.contains("client.get(")
+            || line.contains("client.post(");
+
+        if is_http_client_call {
+            if let Some(url) = extract_first_route_literal(line) {
+                let caller = module
+                    .functions
+                    .iter()
+                    .chain(module.test_cases.iter())
+                    .find(|f| f.location.start_line <= line_num && line_num <= f.location.end_line)
+                    .map(|f| f.name.clone())
+                    .unwrap_or_else(|| "<module>".to_string());
+
+                module.call_refs.push(CallRef {
+                    caller_name: caller,
+                    callee_name: format!("ROUTE::{url}"),
+                    call_site_line: line_num,
+                });
+            }
+        }
+    }
+}
+
+fn extract_first_route_literal(line: &str) -> Option<String> {
+    for quote in ['"', '\'', '`'] {
+        let mut rest = line;
+        while let Some(start) = rest.find(quote) {
+            let after = &rest[start + 1..];
+            if let Some(end) = after.find(quote) {
+                let candidate = after[..end].trim();
+                if candidate.starts_with('/')
+                    || candidate.starts_with("http://")
+                    || candidate.starts_with("https://")
+                {
+                    return Some(candidate.to_string());
+                }
+                rest = &after[end + 1..];
+            } else {
+                break;
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

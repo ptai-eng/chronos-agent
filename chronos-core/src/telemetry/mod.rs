@@ -26,5 +26,7 @@ pub mod adapter;
 pub mod cdp_client;
 pub mod hydration;
 pub mod ebpf_adapter;
+pub mod profile_loader;
 
 pub use adapter::{TelemetryAdapter, TelemetryData, TelemetrySession};
+pub use profile_loader::{load_profile_from_file, parse_profile_str};

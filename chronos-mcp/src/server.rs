@@ -152,6 +152,10 @@ async fn handle_request(req: JsonRpcRequest, state: SharedState) -> JsonRpcRespo
                     let result = tools::handle_get_architecture(state, tool_params).await;
                     JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
                 }
+                Some("chronos_hydrate_telemetry") => {
+                    let result = tools::handle_hydrate_telemetry(state, tool_params).await;
+                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
+                }
                 Some(unknown) => {
                     warn!("Unknown tool called: {}", unknown);
                     JsonRpcResponse::err(id, -32601, format!("Tool not found: {}", unknown))

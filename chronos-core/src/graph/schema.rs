@@ -72,6 +72,8 @@ pub enum EdgeKind {
     Implements,
     /// A tests B: test case covers a specific function
     Tests,
+    /// A co-changes with B in Git commit history (temporal coupling)
+    CoChangesWith,
 }
 
 /// Source location in the original file
@@ -284,6 +286,9 @@ pub struct ChronosGraph {
     pub resolved_call_sites: usize,
     /// Number of dynamic or external call sites that could not be statically resolved
     pub unresolved_call_sites: usize,
+    /// Pending cross-file / cross-boundary call references `(caller_id, callee_or_route, line)`
+    /// retained so parse order between files or frontend/backend never drops edges.
+    pending_call_refs: Vec<(NodeId, String, usize)>,
 }
 
 impl ChronosGraph {
@@ -295,7 +300,41 @@ impl ChronosGraph {
             last_hydrated: None,
             resolved_call_sites: 0,
             unresolved_call_sites: 0,
+            pending_call_refs: Vec::new(),
         }
+    }
+
+    /// Remove all nodes (and incident edges) belonging to `file_path`, rebuilding the node index.
+    /// Used by Incremental `xxHash64` indexing when a single file is re-parsed.
+    pub fn remove_nodes_for_file(&mut self, file_path: &std::path::Path) -> usize {
+        let target_norm = file_path.to_string_lossy().replace('\\', "/");
+        let mut to_remove: Vec<NodeIndex> = self
+            .graph
+            .node_indices()
+            .filter(|&idx| {
+                self.graph[idx]
+                    .location
+                    .file
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    == target_norm
+            })
+            .collect();
+        let count = to_remove.len();
+        to_remove.sort_by(|a, b| b.index().cmp(&a.index()));
+        for idx in to_remove {
+            self.graph.remove_node(idx);
+        }
+        if count > 0 {
+            self.node_index.clear();
+            for idx in self.graph.node_indices() {
+                let id = self.graph[idx].id.clone();
+                self.node_index.insert(id, idx);
+            }
+            self.pending_call_refs
+                .retain(|(caller_id, _, _)| self.node_index.contains_key(caller_id));
+        }
+        count
     }
 
     /// Add or replace a node in the graph.
@@ -344,7 +383,8 @@ impl ChronosGraph {
 
     /// Ingest all symbols and call references from a `ParsedModule` into the graph.
     ///
-    /// Automatically links `Calls` and `Tests` edges, updates `fan_in`/`fan_out` heuristics,
+    /// Automatically links `Calls` and `Tests` edges, stitches cross-boundary HTTP `ApiRoute` calls
+    /// regardless of file parse order, updates `fan_in`/`fan_out` heuristics,
     /// and tracks resolved vs. unresolved call sites for coverage reporting.
     /// Returns `(nodes_inserted, edges_added)`.
     pub fn ingest_parsed_module(
@@ -357,8 +397,37 @@ impl ChronosGraph {
             inserted += 1;
         }
 
-        // Build symbol name -> NodeId index across all callable/targetable nodes
+        // Build local module lookup first to resolve caller_id for new call_refs
+        let mut module_caller_map: HashMap<String, NodeId> = HashMap::new();
+        for node in parsed.all_nodes() {
+            module_caller_map.insert(node.name.clone(), node.id.clone());
+            if !node.qualified_name.is_empty() {
+                module_caller_map.insert(node.qualified_name.clone(), node.id.clone());
+            }
+        }
+
+        for call_ref in &parsed.call_refs {
+            if let Some(caller_id) = module_caller_map.get(&call_ref.caller_name).cloned() {
+                self.pending_call_refs.push((
+                    caller_id,
+                    call_ref.callee_name.clone(),
+                    call_ref.call_site_line,
+                ));
+            }
+        }
+
+        self.unresolved_call_sites += parsed.unresolved_call_sites;
+        let edges_added = self.resolve_pending_calls_and_routes();
+
+        self.last_parsed = Some(Utc::now());
+        (inserted, edges_added)
+    }
+
+    /// Resolve all pending cross-file function calls and cross-boundary HTTP `ApiRoute` calls,
+    /// then propagate interprocedural `transitive_loop_depth` and refresh `fan_in`/`fan_out`.
+    pub fn resolve_pending_calls_and_routes(&mut self) -> usize {
         let mut name_to_id: HashMap<String, NodeId> = HashMap::new();
+        let mut route_to_ids: HashMap<String, Vec<NodeId>> = HashMap::new();
         let mut test_ids: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
 
         for node in self.graph.node_weights() {
@@ -378,27 +447,60 @@ impl ChronosGraph {
                 if node.kind == NodeKind::TestCase {
                     test_ids.insert(node.id.clone());
                 }
+                if node.kind == NodeKind::ApiRoute {
+                    if let Some(norm) = normalize_http_route(&node.name) {
+                        route_to_ids.entry(norm).or_default().push(node.id.clone());
+                    }
+                } else if let Some(sig) = &node.contract_signature {
+                    if sig.starts_with("ROUTE::") {
+                        if let Some(norm) = normalize_http_route(sig) {
+                            route_to_ids.entry(norm).or_default().push(node.id.clone());
+                        }
+                    }
+                }
             }
         }
 
         let mut edges_added = 0usize;
-        self.unresolved_call_sites += parsed.unresolved_call_sites;
+        let mut still_pending: Vec<(NodeId, String, usize)> = Vec::new();
+        let pending = std::mem::take(&mut self.pending_call_refs);
 
-        for call_ref in &parsed.call_refs {
-            let caller_id = name_to_id.get(&call_ref.caller_name).cloned();
-            let callee_id = name_to_id.get(&call_ref.callee_name).cloned();
+        for (caller, callee_raw, call_site_line) in pending {
+            // 1. Check if this is a cross-boundary HTTP route call ("ROUTE::/api/...")
+            if let Some(route_str) = callee_raw.strip_prefix("ROUTE::") {
+                if let Some(norm) = normalize_http_route(route_str) {
+                    if let Some(targets) = route_to_ids.get(&norm) {
+                        for target_id in targets {
+                            if &caller != target_id {
+                                let edge = ChronosEdge {
+                                    kind: EdgeKind::Calls,
+                                    call_site_line: Some(call_site_line),
+                                    coverage_traced: test_ids.contains(&caller),
+                                };
+                                if self.add_edge(&caller, target_id, edge).is_ok() {
+                                    edges_added += 1;
+                                    self.resolved_call_sites += 1;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                }
+                still_pending.push((caller, callee_raw, call_site_line));
+                continue;
+            }
 
-            match (caller_id, callee_id) {
-                (Some(caller), Some(callee)) if caller == callee => {
+            // 2. Standard symbol call resolution
+            if let Some(callee) = name_to_id.get(&callee_raw).cloned() {
+                if caller == callee {
                     if let Some(node) = self.get_node_mut(&caller) {
                         node.heuristics.is_recursive = true;
                     }
                     self.resolved_call_sites += 1;
-                }
-                (Some(caller), Some(callee)) if caller != callee => {
+                } else {
                     let call_edge = ChronosEdge {
                         kind: EdgeKind::Calls,
-                        call_site_line: Some(call_ref.call_site_line),
+                        call_site_line: Some(call_site_line),
                         coverage_traced: test_ids.contains(&caller),
                     };
                     if self.add_edge(&caller, &callee, call_edge).is_ok() {
@@ -411,20 +513,23 @@ impl ChronosGraph {
                             &callee,
                             ChronosEdge {
                                 kind: EdgeKind::Tests,
-                                call_site_line: Some(call_ref.call_site_line),
+                                call_site_line: Some(call_site_line),
                                 coverage_traced: true,
                             },
                         );
                     }
                 }
-                (Some(_), None) => {
-                    if !is_common_builtin(&call_ref.callee_name) {
-                        self.unresolved_call_sites += 1;
-                    }
-                }
-                _ => {}
+            } else {
+                still_pending.push((caller, callee_raw, call_site_line));
             }
         }
+
+        // Recompute unresolved_call_sites accurately from remaining non-builtin pending calls
+        self.unresolved_call_sites = still_pending
+            .iter()
+            .filter(|(_, callee_name, _)| !is_common_builtin(callee_name))
+            .count();
+        self.pending_call_refs = still_pending;
 
         // Propagate interprocedural transitive_loop_depth & mutual recursion across CALLS edges
         let all_ids: Vec<NodeId> = self.node_index.keys().cloned().collect();
@@ -435,7 +540,6 @@ impl ChronosGraph {
                 }
             }
         }
-        // Up to 4 hops of interprocedural loop depth propagation
         for _ in 0..4 {
             let mut updates: Vec<(NodeId, u32, bool)> = Vec::new();
             for id in &all_ids {
@@ -446,14 +550,19 @@ impl ChronosGraph {
 
                 for callee in self.callees_of(id) {
                     max_callee_trans = max_callee_trans.max(callee.heuristics.transitive_loop_depth);
-                    // Check 2-hop mutual recursion (A -> B -> A)
                     if self.callees_of(&callee.id).iter().any(|c| &c.id == id) {
                         mutual_rec = true;
                     }
                 }
                 let candidate = (own_depth + max_callee_trans).min(10);
-                if candidate > caller_node.heuristics.transitive_loop_depth || mutual_rec != caller_node.heuristics.is_recursive {
-                    updates.push((id.clone(), candidate.max(caller_node.heuristics.transitive_loop_depth), mutual_rec));
+                if candidate > caller_node.heuristics.transitive_loop_depth
+                    || mutual_rec != caller_node.heuristics.is_recursive
+                {
+                    updates.push((
+                        id.clone(),
+                        candidate.max(caller_node.heuristics.transitive_loop_depth),
+                        mutual_rec,
+                    ));
                 }
             }
             if updates.is_empty() {
@@ -478,8 +587,38 @@ impl ChronosGraph {
             }
         }
 
-        self.last_parsed = Some(Utc::now());
-        (inserted, edges_added)
+        edges_added
+    }
+
+    /// Return co-change partners for a node (or its parent File node) discovered from Git history.
+    pub fn co_change_partners_of(&self, id: &NodeId) -> Vec<(&ChronosNode, usize)> {
+        let Some(&idx) = self.node_index.get(id) else { return vec![]; };
+        let node_file = self.graph[idx].location.file.clone();
+        let mut results: Vec<(&ChronosNode, usize)> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for check_idx in self.graph.node_indices() {
+            let n = &self.graph[check_idx];
+            if check_idx == idx || (n.kind == NodeKind::File && n.location.file == node_file) {
+                for edge in self.graph.edges_directed(check_idx, petgraph::Direction::Outgoing) {
+                    if matches!(edge.weight().kind, EdgeKind::CoChangesWith) {
+                        let target = &self.graph[edge.target()];
+                        if seen.insert(target.id.clone()) {
+                            results.push((target, edge.weight().call_site_line.unwrap_or(50)));
+                        }
+                    }
+                }
+                for edge in self.graph.edges_directed(check_idx, petgraph::Direction::Incoming) {
+                    if matches!(edge.weight().kind, EdgeKind::CoChangesWith) {
+                        let source = &self.graph[edge.source()];
+                        if seen.insert(source.id.clone()) {
+                            results.push((source, edge.weight().call_site_line.unwrap_or(50)));
+                        }
+                    }
+                }
+            }
+        }
+        results
     }
 
     /// Compute PageRank centrality across all CALLS edges in the graph.
@@ -853,6 +992,62 @@ impl ChronosGraph {
             last_parsed: self.last_parsed,
             last_hydrated: self.last_hydrated,
         }
+    }
+}
+
+/// Normalize an HTTP route or client URL into a canonical path pattern for cross-boundary stitching.
+/// Examples:
+/// - `"GET /api/orders/:id"` -> `Some("/api/orders/{*}")`
+/// - `"ROUTE::/api/orders/${orderId}?expand=1"` -> `Some("/api/orders/{*}")`
+/// - `"http://localhost:8000/api/orders/42"` -> `Some("/api/orders/{*}")`
+/// - `"/api/orders/{order_id}"` -> `Some("/api/orders/{*}")`
+pub fn normalize_http_route(raw: &str) -> Option<String> {
+    let mut s = raw.trim().trim_matches(|c| c == '"' || c == '\'' || c == '`');
+    if let Some(rest) = s.strip_prefix("ROUTE::") {
+        s = rest.trim();
+    }
+    for method in ["GET ", "POST ", "PUT ", "DELETE ", "PATCH ", "HEAD ", "OPTIONS "] {
+        if let Some(rest) = s.strip_prefix(method) {
+            s = rest.trim();
+            break;
+        }
+    }
+    if let Some(after_scheme) = s.strip_prefix("http://").or_else(|| s.strip_prefix("https://")) {
+        if let Some(slash_pos) = after_scheme.find('/') {
+            s = &after_scheme[slash_pos..];
+        } else {
+            return None;
+        }
+    }
+    if !s.starts_with('/') {
+        return None;
+    }
+    if let Some(q_pos) = s.find(['?', '#']) {
+        s = &s[..q_pos];
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for seg in s.split('/') {
+        let seg = seg.trim();
+        if seg.is_empty() {
+            continue;
+        }
+        let is_param = seg.starts_with(':')
+            || seg.starts_with('{')
+            || seg.starts_with('$')
+            || seg.starts_with('<')
+            || seg.contains("${")
+            || seg.contains('{')
+            || seg.chars().all(|c| c.is_ascii_digit());
+        if is_param {
+            parts.push("{*}".to_string());
+        } else {
+            parts.push(seg.to_lowercase());
+        }
+    }
+    if parts.is_empty() {
+        Some("/".to_string())
+    } else {
+        Some(format!("/{}", parts.join("/")))
     }
 }
 
