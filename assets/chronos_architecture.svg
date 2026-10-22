@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" width="100%" height="100%" role="img" aria-labelledby="arch-title arch-desc">
-  <title id="arch-title">CHRONOS-AGENT v1.4 — 5D Living Code Intelligence Architecture</title>
-  <desc id="arch-desc">Four-tier system schematic showing 7-Language Tree-sitter AST, Cross-Boundary Route Stitching, Git Temporal Co-Change Coupling, and Offline/Live Runtime Telemetry feeding the 5D Knowledge Graph (Petgraph + KuzuDB Incremental Merkle Cache), powering the Super-Mutant Arena, Semantic Contract Broker, and Blast-Radius Engine exposed over 10 MCP Tools and CLI.</desc>
+  <title id="arch-title">CHRONOS-AGENT v1.5 — 5D Living Code Intelligence Architecture</title>
+  <desc id="arch-desc">Four-tier system schematic showing 7-Language Tree-sitter AST, Cross-Boundary Route Stitching, Git Temporal Co-Change Coupling, and Offline/Live Runtime Telemetry feeding the 5D Knowledge Graph (Petgraph + KuzuDB Incremental Merkle Cache), powering the Super-Mutant Arena, Semantic Contract Broker, and Blast-Radius Engine exposed over 11 MCP Tools, OpenAI Codex AGENTS.md Synthesizer, and CLI.</desc>
   <defs>
     <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="2" cy="2" r="1" fill="rgba(45,49,66,0.08)"/>
@@ -22,7 +22,7 @@
   <rect x="4" y="4" width="1112" height="552" rx="6" fill="none" stroke="rgba(45,49,66,0.14)" stroke-width="1"/>
 
   <!-- Header -->
-  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" letter-spacing="0.14em">SYSTEM ARCHITECTURE // CHRONOS-AGENT V1.4</text>
+  <text x="40" y="36" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" letter-spacing="0.14em">SYSTEM ARCHITECTURE // CHRONOS-AGENT V1.5</text>
   <text x="40" y="64" fill="#2d3142" font-size="24" font-weight="600" font-family="Georgia, 'Instrument Serif', serif">5D Living Code Intelligence &amp; Blast-Radius Harness</text>
   <line x1="40" y1="80" x2="1080" y2="80" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
 
@@ -75,8 +75,8 @@
   <text x="780" y="128" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">Live &amp; Offline Telemetry Hydrator</text>
   <text x="780" y="146" fill="#4f5d75" font-size="10" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">V8 CDP • Speedscope • Flamegraph • OTLP • eBPF</text>
 
-  <!-- ================= ROW 2: 4D CORE GRAPH ================= -->
-  <!-- Box 2A: Focal 4D Knowledge Graph (Coral Accent) -->
+  <!-- ================= ROW 2: 5D CORE GRAPH ================= -->
+  <!-- Box 2A: Focal 5D Knowledge Graph (Coral Accent) -->
   <rect x="336" y="208" width="264" height="72" rx="6" fill="#fdf1ec" stroke="#eb6c36" stroke-width="1.5"/>
   <rect x="348" y="216" width="52" height="14" rx="2" fill="#eb6c36"/>
   <text x="374" y="226" fill="#ffffff" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">5D CORE</text>

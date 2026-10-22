@@ -73,7 +73,7 @@ AI coding agents read source files as flat text buffers. When an agent edits a u
 ## Core Architecture: The 4 Pillars
 
 <p align="center">
-  <img src="assets/chronos_architecture.svg" alt="CHRONOS-AGENT v1.4 Architecture Schematic" width="100%"/>
+  <img src="assets/chronos_architecture.svg" alt="CHRONOS-AGENT v1.5 Architecture Schematic" width="100%"/>
 </p>
 
 | Pillar | Responsibility | Implementation | Crate Path |
@@ -88,16 +88,17 @@ AI coding agents read source files as flat text buffers. When an agent edits a u
 ## Capability Matrix &amp; Benchmark
 
 <p align="center">
-  <img src="assets/chronos_benchmark_radar.svg" alt="CHRONOS-AGENT v1.4 Capability Radar Benchmark" width="100%"/>
+  <img src="assets/chronos_benchmark_radar.svg" alt="CHRONOS-AGENT v1.5 Capability Radar Benchmark" width="100%"/>
 </p>
 
 ### Comparison Across Tool Classes
 
-| Capability | Static Linters (`ESLint`, `SonarQube`) | Vanilla Coding Agents (`Copilot`, `Cursor` alone) | Static Graph MCPs (`GitNexus`, `codebase-memory`) | **CHRONOS-AGENT v1.4** |
+| Capability | Static Linters (`ESLint`, `SonarQube`) | Vanilla Coding Agents (`Copilot`, `Cursor` alone) | Static Graph MCPs (`GitNexus`, `codebase-memory`) | **CHRONOS-AGENT v1.5** |
 | :--- | :---: | :---: | :---: | :---: |
 | **Polyglot Call &amp; Test Graph** | Single-file rules | Token window only | Static AST edges | **7 Languages + Incremental `xxHash64` Merkle Cache** |
 | **Cross-Language HTTP Route Stitching** | No | No | File-local only | **2-Pass Normalized Route Bridge (`/{*}`)** |
 | **Git Temporal Co-Change Coupling** | No | No | No | **`CO_CHANGES_WITH` Conditional Probability ($P(B\mid A)$)** |
+| **OpenAI Codex `AGENTS.md` &amp; Strict Schemas** | No | Manual static file | No | **5D Graph Synthesizer (`chronos agents-md`) + `strict: true` JSON Schemas** |
 | **Cypher &amp; BM25 Code Discovery** | No | Grep / Glob only | Read-only Cypher + BM25 | **Read-Only KuzuDB Cypher + BM25 + Snippet Context** |
 | **Hidden $O(N^2)$ Loop Detection** | Basic lint rules | No | Intra-function only | **Interprocedural `transitive_loop_depth` + `linear_scan_in_loop`** |
 | **Runtime &amp; Offline Telemetry** | No | No | No | **V8 `.cpuprofile` + Speedscope + Flamegraph + OTLP + CDP/eBPF** |
@@ -109,7 +110,7 @@ AI coding agents read source files as flat text buffers. When an agent edits a u
 ## Developer HUD &amp; VS Code Extension
 
 <p align="center">
-  <img src="assets/chronos_radar_dashboard.svg" alt="CHRONOS-AGENT v1.4 Developer HUD & Telemetry View" width="100%"/>
+  <img src="assets/chronos_radar_dashboard.svg" alt="CHRONOS-AGENT v1.5 Developer HUD & Telemetry View" width="100%"/>
 </p>
 
 > [!TIP]
@@ -172,7 +173,7 @@ Download the latest release archive from [GitHub Releases](https://github.com/pt
 - **Windows (x64):** `chronos-windows-x64.zip` (`chronos.exe` + `chronos-mcp.exe`)
 - **Linux (x64):** `chronos-linux-x64.tar.gz`
 - **macOS (Apple Silicon):** `chronos-macos-arm64.tar.gz`
-- **VS Code Extension:** `chronos-agent-1.4.0.vsix`
+- **VS Code Extension:** `chronos-agent-1.5.0.vsix`
 
 ### Option 2: Build from Source
 
@@ -197,7 +198,7 @@ cargo build --release
 chronos audit src/services/orderService.ts
 chronos audit chronos-core/src/graph/schema.rs
 
-# 2. Hydrate 4D Runtime Telemetry from Offline Profiles (v1.4)
+# 2. Hydrate 5D Runtime Telemetry from Offline Profiles
 #    Auto-detects V8 .cpuprofile, Speedscope/py-spy JSON, Folded Flamegraph, or OTLP Trace JSON
 chronos hydrate profile.cpuprofile --json
 chronos hydrate flamegraph.folded
@@ -245,9 +246,9 @@ chronos schema --format codex-toml
 > 1. **eBPF Kernel Tracepoints (`chronos-core/src/telemetry/ebpf_adapter.rs`):** Attaches Linux kernel/uprobe tracepoints for low-overhead latency profiling.
 > 2. **Chrome DevTools Protocol (`chronos-core/src/telemetry/cdp_client.rs`):** Connects to local V8 inspector WebSockets to sample live CPU and heap allocations.
 > 3. **Subprocess Mutation Runner (`chronos-core/src/mutation/runner.rs`):** Spawns isolated test-runner subprocesses inside temporary sandboxes with timeout watchdogs.
-> 4. **MCP Client Config Generator (`chronos-cli/src/commands/mcp_config.rs`):** Emits configuration templates for `.cursor/`, `.claude/`, and `.gemini/` directories.
+> 4. **MCP Client Config &amp; Schema Generator (`chronos-cli/src/commands/mcp_info.rs`):** Emits configuration templates for `.codex/`, `.cursor/`, `.claude/`, and `.gemini/` directories.
 >
-> Every MCP tool enforces canonical workspace path validation (`validate_path_within_workspace`), read-only Cypher guards (`validate_readonly_cypher`), parameterized KuzuDB writes, and `_meta.provenance.untrusted_content` tagging.
+> Every MCP tool enforces canonical workspace path validation (`validate_path_within_workspace`), read-only Cypher guards (`validate_readonly_cypher`), parameterized KuzuDB writes, and `_meta.provenance.untrusted_content` tagging. See [`SECURITY.md`](./SECURITY.md) for the complete 4-layer threat model.
 
 ---
 
