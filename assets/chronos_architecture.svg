@@ -117,15 +117,15 @@
   <rect x="260" y="440" width="380" height="56" rx="6" fill="#ffffff" stroke="#2e5aa8" stroke-width="1.2"/>
   <rect x="272" y="448" width="56" height="14" rx="2" fill="rgba(46,90,168,0.1)" stroke="#2e5aa8" stroke-width="0.8"/>
   <text x="300" y="458" fill="#2e5aa8" font-size="8" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">JSON-RPC</text>
-  <text x="450" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos-mcp Server (10 Tools • 9 AI Clients)</text>
-  <text x="450" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Cypher • BM25 • Snippet • Arch • Hydrate</text>
+  <text x="450" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos-mcp Server (11 Tools • Codex &amp; MCP)</text>
+  <text x="450" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">Cypher • BM25 • Snippet • Arch • Hydrate • AGENTS.md</text>
 
   <!-- Box 4B: CLI & VS Code Extension -->
   <rect x="680" y="440" width="340" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
   <rect x="692" y="448" width="44" height="14" rx="2" fill="none" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
   <text x="714" y="458" fill="#2d3142" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">CLI/UI</text>
   <text x="850" y="466" fill="#2d3142" font-size="13" font-weight="600" font-family="-apple-system, 'Geist', sans-serif" text-anchor="middle">chronos CLI &amp; VS Code HUD Extension</text>
-  <text x="850" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">audit • arch • search • snippet • query • hydrate</text>
+  <text x="850" y="484" fill="#4f5d75" font-size="9.5" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">audit • arch • query • hydrate • agents-md • schema</text>
 
   <!-- Bottom Legend Strip -->
   <line x1="40" y1="516" x2="1080" y2="516" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
@@ -138,5 +138,5 @@
   <text x="472" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">Primary Telemetry / Risk Flow</text>
   <line x1="652" y1="532" x2="676" y2="532" stroke="#2e5aa8" stroke-width="1.4"/>
   <text x="684" y="536" fill="#2d3142" font-size="9" font-family="-apple-system, 'Geist', sans-serif">MCP / Developer Interface</text>
-  <text x="1080" y="536" fill="#7a8399" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">111/111 TESTS PASSING • RUST WORKSPACE</text>
+  <text x="1080" y="536" fill="#7a8399" font-size="8" font-family="'Geist Mono', Consolas, monospace" text-anchor="end">114/114 TESTS PASSING • RUST WORKSPACE</text>
 </svg>

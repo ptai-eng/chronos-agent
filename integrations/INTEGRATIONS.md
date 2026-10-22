@@ -1,151 +1,104 @@
-# CHRONOS-AGENT — Integrations Guide
+# CHRONOS-AGENT v1.5.0 — Universal AI Client & OpenAI Codex Integration Guide
 
-Sau khi build `chronos-mcp` binary, file này hướng dẫn cách kết nối với từng AI client.
+`chronos-mcp` speaks standard **MCP JSON-RPC 2.0 (`v2024-11-05`)** over `stdio`, and `chronos schema` exports strict **OpenAI Function Calling / Responses API JSON Schemas** for custom agents.
 
-## Build binary
+---
 
-```powershell
-cd chronos-agent
-$env:PATH = "$env:USERPROFILE\.cargo\bin;C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;$env:PATH"
-cargo build --release --package chronos-mcp
-# Binary: target\release\chronos-mcp.exe
+## 0. Build or Install `chronos` & `chronos-mcp`
+
+```bash
+cargo install --path chronos-cli
+cargo install --path chronos-mcp
+# Verify installation:
+chronos --version
 ```
 
 ---
 
-## 1. Antigravity (Google) — Native MCP
+## 1. OpenAI Codex CLI & ChatGPT Codex (`AGENTS.md` + `config.toml`)
 
-Tạo file schema tại: `C:\Users\PT\.gemini\antigravity\mcp\chronos\`
-
-```json
-// chronos-agent.json (tool schema)
-{
-  "name": "chronos_analyze_file",
-  "description": "Parse TypeScript file and insert into 4D Knowledge Graph",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "file_path": { "type": "string" }
-    },
-    "required": ["file_path"]
-  }
-}
+### A. Register `chronos-mcp` with OpenAI Codex CLI (`openai/codex`)
+Run the one-liner command:
+```bash
+codex mcp add chronos-agent -- chronos-mcp --workspace .
 ```
 
-Config trong `antigravity.json` hoặc `.agy/config.toml`:
+Or add directly to `~/.codex/config.toml` (generate via `chronos schema --format codex-toml`):
+```toml
+[mcp_servers.chronos-agent]
+command = "chronos-mcp"
+args = ["--workspace", "."]
+```
+
+### B. Synthesize a Live `AGENTS.md` from the 5D Knowledge Graph
+OpenAI Codex automatically reads `AGENTS.md` at the root of your repository. Generate or refresh it from the 5D graph with one command:
+```bash
+chronos agents-md --write
+```
+
+### C. Example OpenAI Codex CLI Prompts
+```bash
+codex "Use chronos_get_architecture and chronos_blast_radius to audit impact before refactoring verify_token"
+codex "Run chronos_mutation_gate on src/services/orderService.ts and add unit assertions for any survived mutants"
+```
+
+---
+
+## 2. OpenAI Agents SDK & OpenAI Responses API (`strict: true`)
+
+### A. Export OpenAI Responses API / Function Calling JSON Schema
+```bash
+# For OpenAI Responses API (gpt-5, o3, codex-mini):
+chronos schema --format responses > openai_responses_tools.json
+
+# For OpenAI Chat Completions API & Custom GPT Actions:
+chronos schema --format openai > openai_chat_tools.json
+```
+
+### B. Connect `chronos-mcp` to the OpenAI Agents SDK (Python)
+```python
+import asyncio
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
+
+async def main():
+    async with MCPServerStdio(
+        name="chronos-agent",
+        params={"command": "chronos-mcp", "args": ["--workspace", "."]},
+    ) as chronos_server:
+        agent = Agent(
+            name="Codex Maintainer Agent",
+            instructions="Always check chronos_blast_radius before modifying hub functions and verify changes with chronos_mutation_gate.",
+            mcp_servers=[chronos_server],
+        )
+        result = await Runner.run(agent, "Find all O(N^2) loop hotspots and check their blast radius.")
+        print(result.final_output)
+
+asyncio.run(main())
+```
+
+---
+
+## 3. Google Antigravity
+
+Add to `~/.gemini/antigravity/mcp/` or `.agy/config.toml`:
 ```toml
 [[mcp.servers]]
 name = "chronos-agent"
-command = "C:\\path\\to\\chronos-mcp.exe"
+command = "chronos-mcp"
 args = ["--workspace", "${workspaceFolder}"]
 ```
 
 ---
 
-## 2. Cursor
+## 4. Cursor
 
-Tạo `.cursor/mcp.json` tại root project:
-
+Create `.cursor/mcp.json` at the root of your project:
 ```json
 {
   "mcpServers": {
     "chronos-agent": {
-      "command": "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe",
-      "args": ["--workspace", "${workspaceFolder}"],
-      "env": {}
-    }
-  }
-}
-```
-
-Hoặc global tại `%APPDATA%\Cursor\User\globalStorage\cursor.mcp\mcp.json`.
-
----
-
-## 3. OpenAI Codex CLI
-
-Codex CLI hỗ trợ MCP từ v1.0+. Tạo `~/.codex/config.json`:
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "chronos-agent": {
-        "command": "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe",
-        "args": ["--workspace", "."],
-        "transport": "stdio"
-      }
-    }
-  }
-}
-```
-
-Sử dụng:
-```bash
-codex --mcp chronos-agent "analyze orderService.ts and show me hotspots"
-```
-
----
-
-## 4. OpenCode
-
-Tạo `~/.config/opencode/config.toml` hoặc `.opencode.toml` tại project root:
-
-```toml
-[mcp.servers.chronos]
-command = "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe"
-args = ["--workspace", "."]
-type = "local"
-```
-
----
-
-## 5. Claude Desktop
-
-`%APPDATA%\Claude\claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "chronos-agent": {
-      "command": "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe",
-      "args": ["--workspace", "C:\\your\\project\\root"]
-    }
-  }
-}
-```
-
----
-
-## 6. Cline (VS Code Extension)
-
-Trong VS Code `settings.json`:
-
-```json
-{
-  "cline.mcpServers": {
-    "chronos-agent": {
-      "command": "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe",
-      "args": ["--workspace", "${workspaceFolder}"],
-      "disabled": false,
-      "autoApprove": ["chronos_contract_status", "chronos_query_hotspots", "chronos_blast_radius"]
-    }
-  }
-}
-```
-
----
-
-## 7. Windsurf (Codeium)
-
-`.windsurf/mcp.json` tại project root:
-
-```json
-{
-  "mcpServers": {
-    "chronos-agent": {
-      "serverType": "stdio",
-      "command": "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe",
+      "command": "chronos-mcp",
       "args": ["--workspace", "${workspaceFolder}"]
     }
   }
@@ -154,10 +107,84 @@ Trong VS Code `settings.json`:
 
 ---
 
-## 8. Continue (VS Code / JetBrains)
+## 5. Claude Code & Claude Desktop
 
-`.continue/config.json`:
+Register via Claude Code CLI:
+```bash
+claude mcp add chronos-agent -- chronos-mcp --workspace .
+```
 
+Or add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "chronos-agent": {
+      "command": "chronos-mcp",
+      "args": ["--workspace", "/path/to/your/repo"]
+    }
+  }
+}
+```
+
+---
+
+## 6. OpenCode
+
+Create `.opencode.toml` at your project root:
+```toml
+[mcp.servers.chronos]
+command = "chronos-mcp"
+args = ["--workspace", "."]
+type = "local"
+```
+
+---
+
+## 7. Cline (VS Code Extension)
+
+Add to VS Code `settings.json`:
+```json
+{
+  "cline.mcpServers": {
+    "chronos-agent": {
+      "command": "chronos-mcp",
+      "args": ["--workspace", "${workspaceFolder}"],
+      "disabled": false,
+      "autoApprove": [
+        "chronos_contract_status",
+        "chronos_query_hotspots",
+        "chronos_blast_radius",
+        "chronos_get_architecture",
+        "chronos_search_graph",
+        "chronos_get_snippet"
+      ]
+    }
+  }
+}
+```
+
+---
+
+## 8. Windsurf
+
+Create `.windsurf/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "chronos-agent": {
+      "serverType": "stdio",
+      "command": "chronos-mcp",
+      "args": ["--workspace", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+---
+
+## 9. Continue & Zed Editor
+
+### Continue (`.continue/config.json`)
 ```json
 {
   "experimental": {
@@ -165,7 +192,7 @@ Trong VS Code `settings.json`:
       {
         "transport": {
           "type": "stdio",
-          "command": "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe",
+          "command": "chronos-mcp",
           "args": ["--workspace", "."]
         }
       }
@@ -174,18 +201,13 @@ Trong VS Code `settings.json`:
 }
 ```
 
----
-
-## 9. Zed Editor
-
-`~/.config/zed/settings.json`:
-
+### Zed (`~/.config/zed/settings.json`)
 ```json
 {
   "context_servers": {
     "chronos-agent": {
       "command": {
-        "path": "C:\\Users\\PT\\Downloads\\Claude\\GDGoC-HCMUS AI CHALLENGE 2026\\chronos-agent\\target\\release\\chronos-mcp.exe",
+        "path": "chronos-mcp",
         "args": ["--workspace", "."],
         "env": {}
       }
@@ -196,22 +218,15 @@ Trong VS Code `settings.json`:
 
 ---
 
-## Kiểm tra kết nối
+## Smoke-Testing the MCP Server Over `stdio`
 
-Test thủ công bằng cách pipe JSON vào binary:
+```bash
+# 1. Initialize handshake
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"rootPath":"."}}' | chronos-mcp
 
-```powershell
-# Test initialize
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"rootPath":"C:\\your\\project"}}' | .\target\release\chronos-mcp.exe
+# 2. List all 11 registered MCP tools
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | chronos-mcp
 
-# Test tools/list
-echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | .\target\release\chronos-mcp.exe
-
-# Test chronos_contract_status
-echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"chronos_contract_status","arguments":{}}}' | .\target\release\chronos-mcp.exe
-```
-
-Expected output format:
-```json
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"chronos-agent","version":"0.1.0"}}}
+# 3. Synthesize OpenAI Codex AGENTS.md via MCP
+echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"chronos_generate_agents_md","arguments":{"project_name":"chronos-agent"}}}' | chronos-mcp
 ```

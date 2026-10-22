@@ -1,0 +1,38 @@
+name: CI — Polyglot 5D Graph & Super-Mutant Test Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-suite:
+    name: Rust Workspace Tests (chronos-core, chronos-mcp, chronos-cli)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry and target directory
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run full workspace unit, integration & KuzuDB persistence tests
+        run: cargo test --workspace
+
+      - name: Verify OpenAI Function Calling & Responses API Schema Export
+        run: |
+          cargo run --bin chronos -- schema --format openai > /tmp/openai_schema.json
+          cargo run --bin chronos -- schema --format responses > /tmp/responses_schema.json
+          cargo run --bin chronos -- agents-md --name chronos-agent > /tmp/AGENTS.generated.md
+          test -s /tmp/openai_schema.json
+          test -s /tmp/responses_schema.json
+          test -s /tmp/AGENTS.generated.md

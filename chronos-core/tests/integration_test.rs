@@ -428,3 +428,41 @@ export function handleLogin(token: string): boolean {
     assert_eq!(report.coverage.completeness, "complete");
 }
 
+#[test]
+fn v1_5_agents_md_synthesizer_includes_5d_topology_and_codex_protocol() {
+    use chronos_core::graph::agents_md::synthesize_agents_md;
+
+    let mut parser = TypeScriptParser::new().unwrap();
+    let src = r#"
+export function validateOrderPayload(items: string[], blocked: string[]): boolean {
+    for (const item of items) {
+        if (blocked.includes(item)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+export function checkoutHandler(items: string[]): boolean {
+    return validateOrderPayload(items, []);
+}
+"#;
+    let parsed = parser
+        .parse_source(&PathBuf::from("src/orders.ts"), src)
+        .unwrap();
+    let mut graph = ChronosGraph::new();
+    graph.ingest_parsed_module(&parsed);
+
+    let md = synthesize_agents_md(
+        &graph,
+        std::path::Path::new("."),
+        Some("chronos-agent-fixture"),
+    );
+    assert!(md.contains("# AGENTS.md — chronos-agent-fixture"));
+    assert!(md.contains("OpenAI Codex & MCP Tool Protocol"));
+    assert!(md.contains("validateOrderPayload"));
+    assert!(md.contains("High-Centrality Hub Symbols"));
+    assert!(md.contains("Algorithmic Complexity & Loop Hotspots"));
+}
+
+

@@ -107,13 +107,8 @@ pub fn parse_git_log_co_changes(
     results
 }
 
-/// Run `git log` in `workspace_root`, compute evolutionary co-change pairs, and inject
-/// `EdgeKind::CoChangesWith` edges into `ChronosGraph`.
-pub fn ingest_git_co_changes(
-    graph: &mut ChronosGraph,
-    workspace_root: &Path,
-    max_commits: usize,
-) -> usize {
+/// Mine `git log` in `workspace_root` and return all discovered `CoChangePair`s.
+pub fn mine_git_co_changes(workspace_root: &Path, max_commits: usize) -> Vec<CoChangePair> {
     let output = Command::new("git")
         .arg("-C")
         .arg(workspace_root)
@@ -125,10 +120,20 @@ pub fn ingest_git_co_changes(
 
     let raw_log = match output {
         Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).to_string(),
-        _ => return 0,
+        _ => return Vec::new(),
     };
 
-    let pairs = parse_git_log_co_changes(&raw_log, 2, 40, 25);
+    parse_git_log_co_changes(&raw_log, 2, 40, 25)
+}
+
+/// Run `git log` in `workspace_root`, compute evolutionary co-change pairs, and inject
+/// `EdgeKind::CoChangesWith` edges into `ChronosGraph`.
+pub fn ingest_git_co_changes(
+    graph: &mut ChronosGraph,
+    workspace_root: &Path,
+    max_commits: usize,
+) -> usize {
+    let pairs = mine_git_co_changes(workspace_root, max_commits);
     if pairs.is_empty() {
         return 0;
     }

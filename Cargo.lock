@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "chronos-cli"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chronos-core",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "chronos-core"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "chronos-mcp"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chronos-core",

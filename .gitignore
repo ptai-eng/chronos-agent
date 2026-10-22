@@ -6,7 +6,9 @@ Cargo.lock.bak
 # KuzuDB local database files
 *.kuzu
 .kuzu/
+.chronos/
 kuzu_db/
+*.log
 
 # Node / VS Code Extension
 node_modules/

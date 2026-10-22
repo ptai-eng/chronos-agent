@@ -1,0 +1,56 @@
+name: OpenAI Codex + CHRONOS 5D Blast-Radius PR Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  blast-radius-codex-gate:
+    name: 5D Blast-Radius & OpenAI Codex Automated PR Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR with full Git history (for 5D Co-Change Coupling)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build chronos CLI & MCP Server
+        run: cargo build --bins
+
+      - name: Compute 5D Blast-Radius & Git Temporal Co-Change Impact on PR Diff
+        id: chronos_diff
+        continue-on-error: true
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || 'HEAD~1' }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha || 'HEAD' }}"
+          ./target/debug/chronos diff --range "${BASE_SHA}..${HEAD_SHA}" --json > blast_radius_report.json
+          ./target/debug/chronos diff --range "${BASE_SHA}..${HEAD_SHA}" > blast_radius_summary.md
+          cat blast_radius_summary.md
+
+      - name: Run OpenAI Codex Automated Blast-Radius Review (when OPENAI_API_KEY is configured)
+        if: env.OPENAI_API_KEY != ''
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          npm install -g @openai/codex
+          codex mcp add chronos-agent -- ./target/debug/chronos-mcp --workspace .
+          codex exec --full-auto "Review blast_radius_report.json and AGENTS.md. Identify any HIGH/CRITICAL blast-radius functions, missing co-change file updates, or survived mutant risks in this PR." > codex_review.md
+
+      - name: Upload 5D Blast-Radius Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chronos-5d-blast-radius-report
+          path: |
+            blast_radius_report.json
+            blast_radius_summary.md

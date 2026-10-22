@@ -160,6 +160,27 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Synthesize a live AGENTS.md specification from the 5D Knowledge Graph for OpenAI Codex CLI & ChatGPT Codex
+    AgentsMd {
+        /// Optional directory or files to index (defaults to workspace root)
+        #[arg(short, long)]
+        files: Vec<PathBuf>,
+        /// Optional project title override
+        #[arg(long)]
+        name: Option<String>,
+        /// Write directly to disk (default output file: AGENTS.md)
+        #[arg(long)]
+        write: bool,
+        /// Output file path when --write is enabled (default: AGENTS.md)
+        #[arg(short, long, default_value = "AGENTS.md")]
+        output: PathBuf,
+    },
+    /// Export all 11 CHRONOS tool schemas for OpenAI Function Calling, OpenAI Responses API, or Codex CLI TOML
+    Schema {
+        /// Output format: openai | responses | codex-toml | mcp
+        #[arg(short, long, default_value = "openai")]
+        format: String,
+    },
 }
 
 #[tokio::main]
@@ -431,6 +452,36 @@ async fn main() -> Result<()> {
                 println!("{}", session.summary());
                 println!("{}", report);
             }
+            Ok(())
+        }
+        Commands::AgentsMd { files, name, write, output } => {
+            use chronos_core::graph::agents_md::synthesize_agents_md;
+            let graph = build_cli_graph(&workspace, &files)?;
+            let md = synthesize_agents_md(&graph, &workspace, name.as_deref());
+            if write {
+                let out_path = if output.is_absolute() {
+                    output
+                } else {
+                    workspace.join(&output)
+                };
+                if let Some(parent) = out_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                std::fs::write(&out_path, &md)?;
+                println!(
+                    "✅ Synthesized OpenAI Codex AGENTS.md ({} bytes, {} graph nodes) -> {}",
+                    md.len(),
+                    graph.node_count(),
+                    out_path.display()
+                );
+            } else {
+                print!("{md}");
+            }
+            Ok(())
+        }
+        Commands::Schema { format } => {
+            let out = commands::mcp_info::export_schema(&format)?;
+            println!("{out}");
             Ok(())
         }
     }

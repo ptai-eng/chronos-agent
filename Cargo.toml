@@ -7,11 +7,11 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.4.0"
+version = "1.5.0"
 edition = "2021"
 authors = ["CHRONOS-AGENT Project"]
 license = "MIT"
-description = "4D Dynamic Knowledge Graph + Runtime Telemetry + Mutation Testing Agent Harness"
+description = "5D Dynamic Knowledge Graph + Runtime Telemetry + Super-Mutant Testing + OpenAI Codex AGENTS.md Harness"
 
 [workspace.dependencies]
 # Serialization

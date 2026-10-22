@@ -5,50 +5,50 @@
 <h1 align="center">CHRONOS-AGENT</h1>
 
 <p align="center">
-  <strong>5D Living Code Graph, Polyglot Cypher Engine, Cross-Boundary Route Stitching, Git Co-Change Blast-Radius &amp; Super-Mutant Gating for AI Coding Agents</strong>
+  <strong>5D Living Code Graph, OpenAI Codex <code>AGENTS.md</code> Synthesizer, Polyglot Cypher Engine, Cross-Boundary Route Stitching &amp; Super-Mutant Gating for Autonomous AI Agents</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.4.0"><img src="https://img.shields.io/badge/Version-1.4.0-111827?style=flat-square" alt="Version 1.4.0"></a>
+  <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.5.0"><img src="https://img.shields.io/badge/Version-1.5.0-111827?style=flat-square" alt="Version 1.5.0"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-2024%20Edition-EB6C36?style=flat-square&logo=rust&logoColor=white" alt="Rust Version"></a>
-  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-111%2F111%20Passing-1A7F5A?style=flat-square" alt="Tests 111/111 Passing"></a>
-  <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-10%20Tools%20%28v2024--11--05%29-2E5AA8?style=flat-square" alt="MCP Protocol"></a>
-  <a href="./integrations/INTEGRATIONS.md"><img src="https://img.shields.io/badge/AI%20Clients-9%20Supported-4B5563?style=flat-square" alt="AI Clients"></a>
-  <a href="#security--privacy-notice-nvidia-skillspector-alert"><img src="https://img.shields.io/badge/Security-SkillSpector%20Audited-B42318?style=flat-square" alt="Security Notice"></a>
+  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-114%2F114%20Passing-1A7F5A?style=flat-square" alt="Tests 114/114 Passing"></a>
+  <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-11%20Tools%20%28v2024--11--05%29-2E5AA8?style=flat-square" alt="MCP Protocol"></a>
+  <a href="./AGENTS.md"><img src="https://img.shields.io/badge/OpenAI%20Codex-AGENTS.md%20Ready-10A37F?style=flat-square&logo=openai&logoColor=white" alt="OpenAI Codex Ready"></a>
+  <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-4--Layer%20Hardened-B42318?style=flat-square" alt="Security Notice"></a>
 </p>
 
 ---
 
 ## Table of Contents
 
-- [What's New in v1.4.0](#whats-new-in-v140)
+- [What's New in v1.5.0](#whats-new-in-v150)
 - [Why CHRONOS Exists](#why-chronos-exists)
 - [Core Architecture: The 4 Pillars](#core-architecture-the-4-pillars)
 - [Capability Matrix &amp; Benchmark](#capability-matrix--benchmark)
 - [Developer HUD &amp; VS Code Extension](#developer-hud--vs-code-extension)
-- [Universal AI Integrations (9 Clients &amp; 10 MCP Tools)](#universal-ai-integrations-9-clients--10-mcp-tools)
+- [Universal AI Integrations (OpenAI Codex, Agents SDK &amp; 11 MCP Tools)](#universal-ai-integrations-openai-codex-agents-sdk--11-mcp-tools)
 - [Quickstart &amp; Installation](#quickstart--installation)
 - [CLI Command Suite](#cli-command-suite)
 - [Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)](#security--privacy-notice-nvidia-skillspector-alert)
 
 ---
 
-## What's New in v1.4.0
+## What's New in v1.5.0
 
-`v1.4.0` resolves the 5 core architectural bottlenecks of polyglot graph analysis, mutation compile times, and cross-platform telemetry hydration—with **zero new external crate dependencies**:
+`v1.5.0` (**The OpenAI Codex & `AGENTS.md` Edition**) bridges the 5D Knowledge Graph directly into **OpenAI Codex CLI (`openai/codex`)**, **ChatGPT Codex Cloud**, **OpenAI Responses API (`strict: true`)**, and **GitHub Actions CI PR Gating**:
 
-| Subsystem | v1.4.0 Upgrade |
+| Subsystem | v1.5.0 Upgrade |
 | :--- | :--- |
-| **1. Incremental `xxHash64` Merkle Graph Cache** | Persists per-file `xxHash64` digests in `KuzuDB` (`ChronosFileHash` table). Unchanged files are skipped in `<1ms` without invoking Tree-sitter; modified files automatically evict stale/deleted symbols (`remove_nodes_for_file`) before re-ingesting. |
-| **2. Cross-Boundary API &amp; Route Stitching (Frontend $\leftrightarrow$ Backend)** | Extracts HTTP route handlers (`@app.get`, `#[get]`, `@GetMapping`, `http.HandleFunc`, `app.get`, `.route`) and client calls (`fetch`, `axios`, `requests`, `http.Get`) across all 7 languages, normalizes path parameters (`:id`, `{id}`, `${userId}` $\rightarrow$ `/{*}`), and stitches cross-language `CALLS` edges regardless of file parse order via 2-pass `resolve_pending_calls_and_routes()`. |
-| **3. 5th Dimension: Git Temporal Co-Change Coupling (`CO_CHANGES_WITH`)** | Mines `git log` commit history (`git_coupling.rs`) to compute conditional co-change probability $P(B \mid A) = \frac{\lvert C(A) \cap C(B)\rvert}{\lvert C(A)\rvert}$, persists `CO_CHANGES_WITH` edges in `KuzuDB`, and surfaces historically coupled files (`.sql` migrations, configs, DTOs) directly in `BlastRadiusReport`. |
-| **4. Env-Switched Super-Mutant Single-Compile Engine** | Combines all non-overlapping line mutations into a single source artifact guarded by runtime `CHRONOS_MUTANT_ID` checks (`build_super_mutant_source` across Rust, Go, Python, TS/JS, C/C++, Java), reducing compiled-language mutation testing from $O(N)$ compilation passes to **$O(1)$ single compile**. |
-| **5. Universal Offline Telemetry Hydrator (`chronos hydrate` / `chronos_hydrate_telemetry`)** | Hydrates the 4th Dimension (p50/p95/p99 latency, CPU% self, hot paths, bottlenecks) on Windows, macOS, and Linux from **4 standard profiler formats** without needing live root eBPF or `--inspect`: Chrome/V8 `.cpuprofile` JSON, `py-spy`/Speedscope JSON, Folded Stack Flamegraphs (`cargo-flamegraph`/`perf`/`pprof`), and OpenTelemetry (OTLP) trace JSON. |
+| **1. 5D `AGENTS.md` Synthesizer (`chronos agents-md` &amp; `chronos_generate_agents_md`)** | Compiles the live 5D Knowledge Graph (Label-Propagation Community Clusters, PageRank Hubs, $O(N^2)$ Loop Hotspots, Cross-Boundary HTTP Routes, and Git `CO_CHANGES_WITH` pairs) into a standard [`AGENTS.md`](./AGENTS.md) blueprint automatically consumed by **OpenAI Codex CLI** and **ChatGPT Codex Cloud**. |
+| **2. OpenAI Strict Function Calling &amp; Responses API Schema Exporter (`chronos schema`)** | Exports all 11 CHRONOS tools as `strict: true` JSON Schemas (`additionalProperties: false`) for the **OpenAI Responses API** (`--format responses`), **OpenAI Chat Completions / Custom GPT Actions** (`--format openai`), and **OpenAI Codex CLI `config.toml`** (`--format codex-toml`). |
+| **3. OpenAI Codex + 5D Blast-Radius CI PR Gate (`.github/workflows/codex-blast-radius.yml`)** | Ships ready-to-run GitHub Actions workflows ([`ci.yml`](./.github/workflows/ci.yml) &amp; [`codex-blast-radius.yml`](./.github/workflows/codex-blast-radius.yml)) that compute 5D PR diff blast-radius (`chronos diff --range ... --json`) and pipe structural risk + Git co-change context into OpenAI Codex CLI for automated PR review. |
+| **4. 4-Layer Security Policy (`SECURITY.md`)** | Formalizes canonical workspace path containment, read-only OpenCypher validation before KuzuDB C++ FFI execution, ephemeral `TempDir` Super-Mutant sandboxes, and `_meta.provenance.untrusted_content` prompt-injection defenses in [`SECURITY.md`](./SECURITY.md). |
 
 <details>
-<summary><strong>Previous Release Highlights (v1.3.0 &amp; v1.2.0)</strong></summary>
+<summary><strong>Previous Release Highlights (v1.4.0, v1.3.0 &amp; v1.2.0)</strong></summary>
 
+- **v1.4.0 — 5D Graph, Incremental Merkle Cache, Route Stitching, Super-Mutant &amp; Offline Hydrator:** Added `ChronosFileHash` `xxHash64` incremental sync in KuzuDB, 2-pass Frontend $\leftrightarrow$ Backend HTTP route stitching (`/{*}`), Git Temporal Co-Change Coupling (`CO_CHANGES_WITH`), `CHRONOS_MUTANT_ID` single-compile Super-Mutant engine, and offline telemetry hydration (`chronos hydrate` / `chronos_hydrate_telemetry`) for V8 `.cpuprofile`, Speedscope, Folded Flamegraphs, and OTLP traces.
 - **v1.3.0 — Polyglot 7-Language AST &amp; Cypher Engine:** Expanded Tree-sitter dispatcher to TypeScript/JS, Python, Rust, Go, C, C++, and Java; added interprocedural `transitive_loop_depth` and `linear_scan_in_loop` $O(N^2)$ detection; added read-only OpenCypher (`chronos_query_graph`), BM25 identifier search (`chronos_search_graph`), verbatim code snippets (`chronos_get_snippet`), and Label Propagation community clustering (`chronos_get_architecture`).
 - **v1.2.0 — KuzuDB Edge Persistence &amp; PageRank Uncertainty:** Full KuzuDB persistence across restarts, 20-iteration damped PageRank ($\alpha = 0.85$) with explicit `confidence_interval` and `residual_unknowns`, `chronos diff --ci` AST span risk gate, and zero-copy `node_modules`/`.venv` symlink sandboxes.
 
@@ -124,9 +124,9 @@ The companion extension (`chronos-vscode/`) integrates the `chronos-mcp` engine 
 
 ---
 
-## Universal AI Integrations (9 Clients &amp; 10 MCP Tools)
+## Universal AI Integrations (OpenAI Codex, Agents SDK &amp; 11 MCP Tools)
 
-`chronos-mcp` speaks standard **Model Context Protocol (MCP v2024-11-05)** over stdio JSON-RPC 2.0 and exposes **10 specialized tools**:
+`chronos-mcp` speaks standard **Model Context Protocol (MCP v2024-11-05)** over stdio JSON-RPC 2.0 and exposes **11 specialized tools** (plus `strict: true` JSON Schema export via `chronos schema --format responses`):
 
 | Tool Name | Category | Description |
 | :--- | :--- | :--- |
@@ -139,24 +139,27 @@ The companion extension (`chronos-vscode/`) integrates the `chronos-mcp` engine 
 | `chronos_search_graph` | **Discovery** | Search symbols via BM25 identifier tokenization (`camelCase`/`snake_case`), regex, and loop/degree filters. |
 | `chronos_get_snippet` | **Context** | Read exact `start_line..=end_line` source code with callers, callees, covering tests, and loop metrics. |
 | `chronos_get_architecture` | **Topology** | Incrementally index workspace, mine Git co-changes, and discover architectural communities &amp; hidden $O(N^2)$ hotspots. |
-| `chronos_hydrate_telemetry` | **v1.4 Telemetry** | Hydrate the 4th Dimension from offline `.cpuprofile`, Speedscope/`py-spy`, Folded Flamegraph, or OTLP trace artifacts. |
+| `chronos_hydrate_telemetry` | **Telemetry** | Hydrate the 4th Dimension from offline `.cpuprofile`, Speedscope/`py-spy`, Folded Flamegraph, or OTLP trace artifacts. |
+| `chronos_generate_agents_md` | **v1.5 OpenAI Codex** | Synthesize a live [`AGENTS.md`](./AGENTS.md) specification from the 5D Knowledge Graph for OpenAI Codex CLI &amp; ChatGPT Codex Cloud. |
 
-| Client | Platform | Configuration Path |
+| Client | Platform | Configuration / One-Line Setup |
 | :--- | :--- | :--- |
+| **OpenAI Codex CLI** | CLI / ChatGPT Pro | `codex mcp add chronos-agent -- chronos-mcp --workspace .` (`~/.codex/config.toml`) |
+| **OpenAI Agents SDK** | Python / TS | `MCPServerStdio(params={"command": "chronos-mcp", "args": ["--workspace", "."]})` |
 | **Antigravity (Google)** | CLI / IDE | `~/.gemini/antigravity/mcp/` |
 | **Cursor** | IDE | `.cursor/mcp.json` |
-| **Claude Desktop** | Desktop | `%APPDATA%\Claude\claude_desktop_config.json` |
+| **Claude Desktop / Code** | CLI / Desktop | `claude mcp add chronos-agent -- chronos-mcp --workspace .` |
 | **Windsurf** | IDE | `.windsurf/mcp.json` |
 | **Cline** | VS Code Extension | `settings.json` |
-| **OpenAI Codex CLI** | CLI | `~/.codex/config.json` |
 | **OpenCode** | CLI | `.opencode.toml` |
-| **Continue** | VS Code / JetBrains | `.continue/config.json` |
-| **Zed** | Editor | `~/.config/zed/settings.json` |
+| **Continue / Zed** | IDE / Editor | `.continue/config.json` / `~/.config/zed/settings.json` |
 
-Generate ready-to-paste configuration snippets for any client:
+Generate ready-to-paste configuration snippets or OpenAI tool schemas:
 
 ```bash
-chronos mcp --client all
+chronos mcp --client codex
+chronos schema --format responses > openai_tools.json
+chronos agents-md --write
 ```
 
 ---
@@ -223,6 +226,11 @@ chronos status --watch src/services/
 # 9. Git Diff Blast-Radius & CI Gate (full AST span matching + ImpactAnalyzer)
 chronos diff                          # Unstaged working tree changes
 chronos diff --staged --json --ci     # Machine-readable JSON; exits 1 on HIGH risk
+
+# 10. Synthesize OpenAI Codex AGENTS.md & Export OpenAI Strict Tool Schemas (v1.5)
+chronos agents-md --write
+chronos schema --format responses > openai_tools.json
+chronos schema --format codex-toml
 ```
 
 ---

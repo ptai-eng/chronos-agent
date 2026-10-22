@@ -1,8 +1,8 @@
 {
   "name": "chronos-agent",
   "displayName": "CHRONOS Agent",
-  "description": "4D Living Code Intelligence Harness — Real-time blast-radius + mutation score",
-  "version": "1.4.0",
+  "description": "5D Living Code Intelligence Harness — Real-time blast-radius, OpenAI Codex AGENTS.md synthesizer + mutation score",
+  "version": "1.5.0",
   "publisher": "ptai-eng",
   "engines": {
     "vscode": "^1.90.0"

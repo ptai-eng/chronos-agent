@@ -1,8 +1,9 @@
-//! # Tools module — all 10 CHRONOS MCP tools
+//! # Tools module — all 11 CHRONOS MCP tools
 
 pub mod analyze_file;
 pub mod blast_radius;
 pub mod contract_status;
+pub mod generate_agents_md;
 pub mod get_architecture;
 pub mod get_snippet;
 pub mod hotspots;
@@ -252,12 +253,44 @@ pub fn all_tools() -> Vec<McpTool> {
                 "required": []
             }),
         },
+        McpTool {
+            name: "chronos_generate_agents_md",
+            description: "Synthesize a live, data-driven AGENTS.md specification from the 5D Knowledge Graph \
+                          (Community Clusters, PageRank Hubs, O(N^2) Loop Hotspots, Cross-Boundary Routes, and Git Co-Changes) \
+                          tailored for OpenAI Codex CLI, ChatGPT Codex Cloud, and autonomous coding agents.",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "project_name": {
+                        "type": "string",
+                        "description": "Optional project title override for the AGENTS.md header"
+                    },
+                    "write_to_disk": {
+                        "type": "boolean",
+                        "description": "If true, writes the synthesized AGENTS.md directly into the workspace (default: false)",
+                        "default": false
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Relative workspace path when write_to_disk is true (default: 'AGENTS.md')",
+                        "default": "AGENTS.md"
+                    },
+                    "auto_index": {
+                        "type": "boolean",
+                        "description": "Automatically scan and incrementally index workspace files first (default: true)",
+                        "default": true
+                    }
+                },
+                "required": []
+            }),
+        },
     ]
 }
 
 pub use analyze_file::handle_analyze_file;
 pub use blast_radius::handle_blast_radius;
 pub use contract_status::handle_contract_status;
+pub use generate_agents_md::handle_generate_agents_md;
 pub use get_architecture::handle_get_architecture;
 pub use get_snippet::handle_get_snippet;
 pub use hotspots::handle_query_hotspots;
