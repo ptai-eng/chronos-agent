@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "chronos-agent": {
+      "args": [
+        "--workspace",
+        "${workspaceFolder}"
+      ],
+      "command": "chronos-mcp",
+      "type": "stdio"
+    }
+  }
+}

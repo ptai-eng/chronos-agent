@@ -160,24 +160,42 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Synthesize a live AGENTS.md specification from the 5D Knowledge Graph for OpenAI Codex CLI & ChatGPT Codex
+    /// Synthesize a live AGENTS.md / CLAUDE.md / GEMINI.md / .mdc specification from the 5D Knowledge Graph
     AgentsMd {
+        /// Target AI CLI/IDE ecosystem: codex | antigravity | claude | opencode | cursor | windsurf | copilot | cline
+        #[arg(short, long, default_value = "codex")]
+        target: String,
         /// Optional directory or files to index (defaults to workspace root)
         #[arg(short, long)]
         files: Vec<PathBuf>,
         /// Optional project title override
         #[arg(long)]
         name: Option<String>,
-        /// Write directly to disk (default output file: AGENTS.md)
+        /// Write directly to disk
         #[arg(long)]
         write: bool,
-        /// Output file path when --write is enabled (default: AGENTS.md)
-        #[arg(short, long, default_value = "AGENTS.md")]
-        output: PathBuf,
+        /// Optional output file path override when --write is enabled
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
-    /// Export all 11 CHRONOS tool schemas for OpenAI Function Calling, OpenAI Responses API, or Codex CLI TOML
+    /// Auto-scaffold native 5D rules, skills, slash commands, and MCP configs for any AI coding CLI/IDE
+    Init {
+        /// Target client ecosystem: all | codex | antigravity | claude | opencode | cursor | windsurf | copilot | cline
+        #[arg(short, long, default_value = "all")]
+        client: String,
+        /// Optional files or directories to index before synthesizing
+        #[arg(short, long)]
+        files: Vec<PathBuf>,
+        /// Optional project title override
+        #[arg(long)]
+        name: Option<String>,
+        /// Custom MCP server binary command (default: "chronos-mcp")
+        #[arg(long, default_value = "chronos-mcp")]
+        binary: String,
+    },
+    /// Export all 11 CHRONOS tool schemas for OpenAI, Anthropic Claude, Google Gemini, or Codex CLI TOML
     Schema {
-        /// Output format: openai | responses | codex-toml | mcp
+        /// Output format: openai | responses | anthropic | gemini | codex-toml | mcp
         #[arg(short, long, default_value = "openai")]
         format: String,
     },
@@ -454,22 +472,25 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        Commands::AgentsMd { files, name, write, output } => {
-            use chronos_core::graph::agents_md::synthesize_agents_md;
+        Commands::AgentsMd { target, files, name, write, output } => {
+            use chronos_core::graph::agents_md::{synthesize_target_context, AgentTarget};
+            let agent_target = AgentTarget::from_str_loose(&target);
             let graph = build_cli_graph(&workspace, &files)?;
-            let md = synthesize_agents_md(&graph, &workspace, name.as_deref());
+            let md = synthesize_target_context(&graph, &workspace, agent_target, name.as_deref());
             if write {
-                let out_path = if output.is_absolute() {
-                    output
+                let rel_or_abs = output.unwrap_or_else(|| PathBuf::from(agent_target.default_context_path()));
+                let out_path = if rel_or_abs.is_absolute() {
+                    rel_or_abs
                 } else {
-                    workspace.join(&output)
+                    workspace.join(&rel_or_abs)
                 };
                 if let Some(parent) = out_path.parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
                 std::fs::write(&out_path, &md)?;
                 println!(
-                    "✅ Synthesized OpenAI Codex AGENTS.md ({} bytes, {} graph nodes) -> {}",
+                    "✅ Synthesized {} ({} bytes, {} graph nodes) -> {}",
+                    agent_target.display_name(),
                     md.len(),
                     graph.node_count(),
                     out_path.display()
@@ -477,6 +498,34 @@ async fn main() -> Result<()> {
             } else {
                 print!("{md}");
             }
+            Ok(())
+        }
+        Commands::Init { client, files, name, binary } => {
+            use chronos_core::graph::agents_md::{scaffold_client_files, AgentTarget};
+            let agent_target = AgentTarget::from_str_loose(&client);
+            let graph = build_cli_graph(&workspace, &files)?;
+            let bundle = scaffold_client_files(&graph, &workspace, agent_target, &binary, name.as_deref());
+            println!(
+                "🚀 Scaffolding CHRONOS 5D Integration for {} ({} graph nodes indexed)...",
+                agent_target.display_name(),
+                graph.node_count()
+            );
+            for item in &bundle {
+                let full_path = workspace.join(&item.relative_path);
+                if let Some(parent) = full_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                std::fs::write(&full_path, &item.content)?;
+                println!(
+                    "  ✓ {:<45} ({})",
+                    item.relative_path, item.target_client
+                );
+            }
+            println!(
+                "\n✅ Generated {} native integration file(s) in {}",
+                bundle.len(),
+                workspace.display()
+            );
             Ok(())
         }
         Commands::Schema { format } => {

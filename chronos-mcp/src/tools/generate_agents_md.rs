@@ -1,13 +1,14 @@
 //! # `chronos_generate_agents_md` Tool Handler
 //!
-//! Synthesizes a data-driven `AGENTS.md` file from the 5D Knowledge Graph tailored for
-//! OpenAI Codex CLI (`openai/codex`), ChatGPT Codex Cloud, and autonomous coding agents.
+//! Synthesizes data-driven `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.agents/skills/chronos-agent/SKILL.md`,
+//! `.cursor/rules/chronos-5d.mdc`, and MCP client configurations from the 5D Knowledge Graph for:
+//! OpenAI Codex CLI, Google Antigravity, Anthropic Claude Code, OpenCode, Cursor, Windsurf, Copilot, and Cline.
 
 use crate::protocol::CallToolResult;
 use crate::state::{ChronosState, SharedState};
 use chronos_core::{
     ast::dispatcher::LanguageDispatcher,
-    graph::agents_md::synthesize_agents_md,
+    graph::agents_md::{scaffold_client_files, synthesize_target_context, AgentTarget},
 };
 use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
@@ -22,9 +23,22 @@ pub async fn handle_generate_agents_md(
         .and_then(|v| v.as_str())
         .map(String::from);
 
+    let target_str = params
+        .as_ref()
+        .and_then(|p| p.get("target"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("codex");
+    let target = AgentTarget::from_str_loose(target_str);
+
     let write_to_disk = params
         .as_ref()
         .and_then(|p| p.get("write_to_disk"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let scaffold_configs = params
+        .as_ref()
+        .and_then(|p| p.get("scaffold_configs"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
@@ -32,7 +46,8 @@ pub async fn handle_generate_agents_md(
         .as_ref()
         .and_then(|p| p.get("output_path"))
         .and_then(|v| v.as_str())
-        .unwrap_or("AGENTS.md");
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| target.default_context_path());
 
     let auto_index = params
         .as_ref()
@@ -68,37 +83,71 @@ pub async fn handle_generate_agents_md(
     }
 
     let st = state.read().await;
-    let md_content = synthesize_agents_md(
+    let md_content = synthesize_target_context(
         &st.graph,
         &st.workspace_root,
+        target,
         project_name.as_deref(),
     );
 
     let mut written_path: Option<String> = None;
+    let mut written_files: Vec<String> = Vec::new();
+
     if write_to_disk {
-        let rel_path = Path::new(output_rel);
-        if rel_path.is_absolute()
-            || rel_path
-                .components()
-                .any(|c| matches!(c, Component::ParentDir))
-        {
-            return CallToolResult::error(
-                "Security Error: output_path must be a relative path inside the workspace without '..' traversal.",
+        if scaffold_configs || target == AgentTarget::All {
+            let bundle = scaffold_client_files(
+                &st.graph,
+                &st.workspace_root,
+                target,
+                "chronos-mcp",
+                project_name.as_deref(),
             );
+            for item in bundle {
+                let rel_path = Path::new(&item.relative_path);
+                if rel_path.is_absolute()
+                    || rel_path
+                        .components()
+                        .any(|c| matches!(c, Component::ParentDir))
+                {
+                    continue;
+                }
+                let full_path = st.workspace_root.join(rel_path);
+                if let Some(parent) = full_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if std::fs::write(&full_path, &item.content).is_ok() {
+                    written_files.push(item.relative_path);
+                }
+            }
+            written_path = written_files.first().cloned();
+        } else {
+            let rel_path = Path::new(output_rel);
+            if rel_path.is_absolute()
+                || rel_path
+                    .components()
+                    .any(|c| matches!(c, Component::ParentDir))
+            {
+                return CallToolResult::error(
+                    "Security Error: output_path must be a relative path inside the workspace without '..' traversal.",
+                );
+            }
+            let target_path = st.workspace_root.join(rel_path);
+            if let Some(parent) = target_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Err(e) = std::fs::write(&target_path, &md_content) {
+                return CallToolResult::error(format!("Failed to write context file: {e}"));
+            }
+            written_path = Some(target_path.to_string_lossy().to_string());
+            written_files.push(output_rel.to_string());
         }
-        let target_path = st.workspace_root.join(rel_path);
-        if let Some(parent) = target_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if let Err(e) = std::fs::write(&target_path, &md_content) {
-            return CallToolResult::error(format!("Failed to write AGENTS.md: {e}"));
-        }
-        written_path = Some(target_path.to_string_lossy().to_string());
     }
 
     let output = json!({
         "status": "ok",
+        "target": target.display_name(),
         "written_path": written_path,
+        "written_files": written_files,
         "agents_md": md_content,
         "_meta": {
             "provenance": {

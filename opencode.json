@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "chronos-agent": {
+      "command": [
+        "chronos-mcp",
+        "--workspace",
+        "."
+      ],
+      "enabled": true,
+      "type": "local"
+    }
+  }
+}

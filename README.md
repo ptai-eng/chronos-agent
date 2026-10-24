@@ -5,16 +5,16 @@
 <h1 align="center">CHRONOS-AGENT</h1>
 
 <p align="center">
-  <strong>5D Living Code Graph, OpenAI Codex <code>AGENTS.md</code> Synthesizer, Polyglot Cypher Engine, Cross-Boundary Route Stitching &amp; Super-Mutant Gating for Autonomous AI Agents</strong>
+  <strong>5D Living Code Graph, Universal Multi-Agent Context Synthesizer (<code>AGENTS.md</code> / <code>CLAUDE.md</code> / <code>GEMINI.md</code> / <code>SKILL.md</code>), Polyglot Cypher Engine, Cross-Boundary Route Stitching &amp; Super-Mutant Gating</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.5.0"><img src="https://img.shields.io/badge/Version-1.5.0-111827?style=flat-square" alt="Version 1.5.0"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-2024%20Edition-EB6C36?style=flat-square&logo=rust&logoColor=white" alt="Rust Version"></a>
-  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-114%2F114%20Passing-1A7F5A?style=flat-square" alt="Tests 114/114 Passing"></a>
+  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-115%2F115%20Passing-1A7F5A?style=flat-square" alt="Tests 115/115 Passing"></a>
   <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-11%20Tools%20%28v2024--11--05%29-2E5AA8?style=flat-square" alt="MCP Protocol"></a>
-  <a href="./AGENTS.md"><img src="https://img.shields.io/badge/OpenAI%20Codex-AGENTS.md%20Ready-10A37F?style=flat-square&logo=openai&logoColor=white" alt="OpenAI Codex Ready"></a>
+  <a href="./AGENTS.md"><img src="https://img.shields.io/badge/Multi--Agent-Codex%20%7C%20Antigravity%20%7C%20Claude%20%7C%20OpenCode-10A37F?style=flat-square" alt="Multi-Agent Ready"></a>
   <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-4--Layer%20Hardened-B42318?style=flat-square" alt="Security Notice"></a>
 </p>
 
@@ -27,7 +27,7 @@
 - [Core Architecture: The 4 Pillars](#core-architecture-the-4-pillars)
 - [Capability Matrix &amp; Benchmark](#capability-matrix--benchmark)
 - [Developer HUD &amp; VS Code Extension](#developer-hud--vs-code-extension)
-- [Universal AI Integrations (OpenAI Codex, Agents SDK &amp; 11 MCP Tools)](#universal-ai-integrations-openai-codex-agents-sdk--11-mcp-tools)
+- [Universal AI Integrations (Codex, Antigravity, Claude Code, OpenCode &amp; 11 MCP Tools)](#universal-ai-integrations-codex-antigravity-claude-code-opencode--11-mcp-tools)
 - [Quickstart &amp; Installation](#quickstart--installation)
 - [CLI Command Suite](#cli-command-suite)
 - [Security &amp; Privacy Notice (NVIDIA SkillSpector Alert)](#security--privacy-notice-nvidia-skillspector-alert)
@@ -36,12 +36,12 @@
 
 ## What's New in v1.5.0
 
-`v1.5.0` (**The OpenAI Codex & `AGENTS.md` Edition**) bridges the 5D Knowledge Graph directly into **OpenAI Codex CLI (`openai/codex`)**, **ChatGPT Codex Cloud**, **OpenAI Responses API (`strict: true`)**, and **GitHub Actions CI PR Gating**:
+`v1.5.0` (**The Universal Multi-Agent & OpenAI Codex Edition**) bridges the 5D Knowledge Graph directly into **OpenAI Codex CLI (`openai/codex`)**, **Google Antigravity (`agy` CLI &amp; IDE)**, **Anthropic Claude Code (`claude` CLI)**, **OpenCode (`opencode`)**, **Cursor**, **Windsurf**, **GitHub Copilot Coding Agent**, and **GitHub Actions CI PR Gating**:
 
 | Subsystem | v1.5.0 Upgrade |
 | :--- | :--- |
-| **1. 5D `AGENTS.md` Synthesizer (`chronos agents-md` &amp; `chronos_generate_agents_md`)** | Compiles the live 5D Knowledge Graph (Label-Propagation Community Clusters, PageRank Hubs, $O(N^2)$ Loop Hotspots, Cross-Boundary HTTP Routes, and Git `CO_CHANGES_WITH` pairs) into a standard [`AGENTS.md`](./AGENTS.md) blueprint automatically consumed by **OpenAI Codex CLI** and **ChatGPT Codex Cloud**. |
-| **2. OpenAI Strict Function Calling &amp; Responses API Schema Exporter (`chronos schema`)** | Exports all 11 CHRONOS tools as `strict: true` JSON Schemas (`additionalProperties: false`) for the **OpenAI Responses API** (`--format responses`), **OpenAI Chat Completions / Custom GPT Actions** (`--format openai`), and **OpenAI Codex CLI `config.toml`** (`--format codex-toml`). |
+| **1. Universal 5D Context &amp; Skill Synthesizer (`chronos init` &amp; `chronos agents-md`)** | Compiles the live 5D Knowledge Graph (Community Clusters, PageRank Hubs, $O(N^2)$ Loop Hotspots, Cross-Boundary HTTP Routes, and Git `CO_CHANGES_WITH` pairs) into native files for every major AI CLI/IDE: [`AGENTS.md`](./AGENTS.md) (**OpenAI Codex**), [`GEMINI.md`](./GEMINI.md) + [`.agents/skills/chronos-agent/SKILL.md`](./.agents/skills/chronos-agent/SKILL.md) (**Google Antigravity**), [`CLAUDE.md`](./CLAUDE.md) + [`.mcp.json`](./.mcp.json) (**Claude Code**), [`opencode.json`](./opencode.json) (**OpenCode**), and [`.cursor/rules/chronos-5d.mdc`](./.cursor/rules/chronos-5d.mdc) (**Cursor**). |
+| **2. Multi-Provider AI SDK Schema Exporter (`chronos schema`)** | Exports all 11 CHRONOS tools as native JSON Schemas for **OpenAI Responses API** (`--format responses`), **OpenAI Function Calling** (`--format openai`), **Anthropic Claude API** (`--format anthropic`), **Google Gemini / Vertex AI** (`--format gemini`), and **OpenAI Codex CLI `config.toml`** (`--format codex-toml`). |
 | **3. OpenAI Codex + 5D Blast-Radius CI PR Gate (`.github/workflows/codex-blast-radius.yml`)** | Ships ready-to-run GitHub Actions workflows ([`ci.yml`](./.github/workflows/ci.yml) &amp; [`codex-blast-radius.yml`](./.github/workflows/codex-blast-radius.yml)) that compute 5D PR diff blast-radius (`chronos diff --range ... --json`) and pipe structural risk + Git co-change context into OpenAI Codex CLI for automated PR review. |
 | **4. 4-Layer Security Policy (`SECURITY.md`)** | Formalizes canonical workspace path containment, read-only OpenCypher validation before KuzuDB C++ FFI execution, ephemeral `TempDir` Super-Mutant sandboxes, and `_meta.provenance.untrusted_content` prompt-injection defenses in [`SECURITY.md`](./SECURITY.md). |
 
@@ -125,9 +125,9 @@ The companion extension (`chronos-vscode/`) integrates the `chronos-mcp` engine 
 
 ---
 
-## Universal AI Integrations (OpenAI Codex, Agents SDK &amp; 11 MCP Tools)
+## Universal AI Integrations (Codex, Antigravity, Claude Code, OpenCode &amp; 11 MCP Tools)
 
-`chronos-mcp` speaks standard **Model Context Protocol (MCP v2024-11-05)** over stdio JSON-RPC 2.0 and exposes **11 specialized tools** (plus `strict: true` JSON Schema export via `chronos schema --format responses`):
+`chronos-mcp` speaks standard **Model Context Protocol (MCP v2024-11-05)** over stdio JSON-RPC 2.0 and exposes **11 specialized tools** (plus native SDK JSON Schema export for OpenAI, Anthropic Claude, and Google Gemini via `chronos schema`):
 
 | Tool Name | Category | Description |
 | :--- | :--- | :--- |
@@ -141,26 +141,29 @@ The companion extension (`chronos-vscode/`) integrates the `chronos-mcp` engine 
 | `chronos_get_snippet` | **Context** | Read exact `start_line..=end_line` source code with callers, callees, covering tests, and loop metrics. |
 | `chronos_get_architecture` | **Topology** | Incrementally index workspace, mine Git co-changes, and discover architectural communities &amp; hidden $O(N^2)$ hotspots. |
 | `chronos_hydrate_telemetry` | **Telemetry** | Hydrate the 4th Dimension from offline `.cpuprofile`, Speedscope/`py-spy`, Folded Flamegraph, or OTLP trace artifacts. |
-| `chronos_generate_agents_md` | **v1.5 OpenAI Codex** | Synthesize a live [`AGENTS.md`](./AGENTS.md) specification from the 5D Knowledge Graph for OpenAI Codex CLI &amp; ChatGPT Codex Cloud. |
+| `chronos_generate_agents_md` | **Multi-Agent** | Synthesize live [`AGENTS.md`](./AGENTS.md), [`CLAUDE.md`](./CLAUDE.md), [`GEMINI.md`](./GEMINI.md), Antigravity `SKILL.md`, or Cursor `.mdc` rules from the 5D Graph. |
 
-| Client | Platform | Configuration / One-Line Setup |
-| :--- | :--- | :--- |
-| **OpenAI Codex CLI** | CLI / ChatGPT Pro | `codex mcp add chronos-agent -- chronos-mcp --workspace .` (`~/.codex/config.toml`) |
-| **OpenAI Agents SDK** | Python / TS | `MCPServerStdio(params={"command": "chronos-mcp", "args": ["--workspace", "."]})` |
-| **Antigravity (Google)** | CLI / IDE | `~/.gemini/antigravity/mcp/` |
-| **Cursor** | IDE | `.cursor/mcp.json` |
-| **Claude Desktop / Code** | CLI / Desktop | `claude mcp add chronos-agent -- chronos-mcp --workspace .` |
-| **Windsurf** | IDE | `.windsurf/mcp.json` |
-| **Cline** | VS Code Extension | `settings.json` |
-| **OpenCode** | CLI | `.opencode.toml` |
-| **Continue / Zed** | IDE / Editor | `.continue/config.json` / `~/.config/zed/settings.json` |
+### One-Command Auto-Scaffold (`chronos init`)
 
-Generate ready-to-paste configuration snippets or OpenAI tool schemas:
+| AI Coding CLI / IDE | One-Command Bootstrap | Synthesized Context / Skill / Rule Files | Native MCP Config |
+| :--- | :--- | :--- | :--- |
+| **All Ecosystems (16 files)** | `chronos init --client all` | All rules, skills, subagents &amp; slash commands below | All configs below |
+| **OpenAI Codex CLI &amp; ChatGPT Codex** | `chronos init --client codex` | [`AGENTS.md`](./AGENTS.md) | [`.codex/config.toml`](./.codex/config.toml) (`codex mcp add`) |
+| **Google Antigravity (`agy` CLI &amp; IDE)** | `chronos init --client antigravity` | [`GEMINI.md`](./GEMINI.md) + [`.agents/skills/chronos-agent/SKILL.md`](./.agents/skills/chronos-agent/SKILL.md) | [`.agents/plugins/chronos-agent/mcp_config.json`](./.agents/plugins/chronos-agent/mcp_config.json) |
+| **Anthropic Claude Code &amp; Desktop** | `chronos init --client claude` | [`CLAUDE.md`](./CLAUDE.md) + [`.claude/commands/chronos-audit.md`](./.claude/commands/chronos-audit.md) | [`.mcp.json`](./.mcp.json) (`claude mcp add`) |
+| **OpenCode CLI (`opencode`)** | `chronos init --client opencode` | [`.opencode/agent/chronos-auditor.md`](./.opencode/agent/chronos-auditor.md) | [`opencode.json`](./opencode.json) |
+| **Cursor IDE &amp; Agent CLI** | `chronos init --client cursor` | [`.cursor/rules/chronos-5d.mdc`](./.cursor/rules/chronos-5d.mdc) (`alwaysApply: true`) | [`.cursor/mcp.json`](./.cursor/mcp.json) |
+| **Windsurf Cascade** | `chronos init --client windsurf` | [`.windsurfrules`](./.windsurfrules) | [`.windsurf/mcp.json`](./.windsurf/mcp.json) |
+| **GitHub Copilot Agent &amp; VS Code** | `chronos init --client copilot` | [`.github/copilot-instructions.md`](./.github/copilot-instructions.md) | [`.vscode/mcp.json`](./.vscode/mcp.json) |
+| **Cline &amp; Roo Code** | `chronos init --client cline` | [`.clinerules`](./.clinerules) | `cline.mcpServers` / `.roo/mcp.json` |
+
+Generate native client scaffolds or export AI SDK tool schemas:
 
 ```bash
-chronos mcp --client codex
-chronos schema --format responses > openai_tools.json
-chronos agents-md --write
+chronos init --client all                        # Scaffold Codex, Antigravity, Claude Code, OpenCode, Cursor, Windsurf, Copilot & Cline
+chronos schema --format responses > openai.json  # OpenAI Responses API (strict: true)
+chronos schema --format anthropic > claude.json  # Anthropic Claude Messages API (input_schema)
+chronos schema --format gemini > gemini.json     # Google Gemini / Vertex AI (functionDeclarations)
 ```
 
 ---
@@ -228,10 +231,12 @@ chronos status --watch src/services/
 chronos diff                          # Unstaged working tree changes
 chronos diff --staged --json --ci     # Machine-readable JSON; exits 1 on HIGH risk
 
-# 10. Synthesize OpenAI Codex AGENTS.md & Export OpenAI Strict Tool Schemas (v1.5)
-chronos agents-md --write
+# 10. Auto-Scaffold Native Multi-Agent Rules, Skills & MCP Configs + Export AI SDK Schemas
+chronos init --client all                        # Generates AGENTS.md, CLAUDE.md, GEMINI.md, .agents/skills/, .mcp.json, opencode.json, etc.
+chronos agents-md --target antigravity --write   # Refresh GEMINI.md from 5D Knowledge Graph
 chronos schema --format responses > openai_tools.json
-chronos schema --format codex-toml
+chronos schema --format anthropic > claude_tools.json
+chronos schema --format gemini > gemini_tools.json
 ```
 
 ---

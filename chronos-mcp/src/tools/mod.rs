@@ -255,25 +255,34 @@ pub fn all_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "chronos_generate_agents_md",
-            description: "Synthesize a live, data-driven AGENTS.md specification from the 5D Knowledge Graph \
-                          (Community Clusters, PageRank Hubs, O(N^2) Loop Hotspots, Cross-Boundary Routes, and Git Co-Changes) \
-                          tailored for OpenAI Codex CLI, ChatGPT Codex Cloud, and autonomous coding agents.",
+            description: "Synthesize live, data-driven context rules, skills, and MCP configs from the 5D Knowledge Graph \
+                          (AGENTS.md, CLAUDE.md, GEMINI.md, .agents/skills/chronos-agent/SKILL.md, .cursor/rules/chronos-5d.mdc) \
+                          for OpenAI Codex CLI, Google Antigravity, Claude Code, OpenCode, Cursor, Windsurf, Copilot, and Cline.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "Target AI CLI/IDE ecosystem: codex | antigravity | claude | opencode | cursor | windsurf | copilot | cline | all (default: 'codex')",
+                        "default": "codex"
+                    },
                     "project_name": {
                         "type": "string",
-                        "description": "Optional project title override for the AGENTS.md header"
+                        "description": "Optional project title override for the synthesized header"
                     },
                     "write_to_disk": {
                         "type": "boolean",
-                        "description": "If true, writes the synthesized AGENTS.md directly into the workspace (default: false)",
+                        "description": "If true, writes the synthesized file(s) directly into the workspace (default: false)",
+                        "default": false
+                    },
+                    "scaffold_configs": {
+                        "type": "boolean",
+                        "description": "If true (with write_to_disk=true), also scaffolds native MCP configs, skills, and slash commands for the target client",
                         "default": false
                     },
                     "output_path": {
                         "type": "string",
-                        "description": "Relative workspace path when write_to_disk is true (default: 'AGENTS.md')",
-                        "default": "AGENTS.md"
+                        "description": "Optional relative workspace path override when writing a single context file"
                     },
                     "auto_index": {
                         "type": "boolean",
