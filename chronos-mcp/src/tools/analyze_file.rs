@@ -5,7 +5,7 @@
 
 use crate::protocol::CallToolResult;
 use crate::state::SharedState;
-use chronos_core::ast::dispatcher::LanguageDispatcher;
+use chronos_core::{ast::dispatcher::LanguageDispatcher, graph::query::GraphQueryEngine};
 use serde_json::Value;
 use std::path::PathBuf;
 use tracing::warn;
@@ -87,6 +87,7 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
 
     let broker = st.broker.clone();
     let report = st.graph.status_report();
+    let four_angles = GraphQueryEngine::new(&st.graph).audit_file_four_angles(&file_path);
 
     // Drop lock before await
     drop(st);
@@ -95,6 +96,22 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
     if let Err(e) = broker.index_file(&abs_path).await {
         warn!("Contract broker indexing failed for {}: {}", abs_path.display(), e);
     }
+
+    let four_angle_section = if four_angles.is_empty() {
+        "  - No Reuse/Efficiency/Simplification/Altitude warnings detected.".to_string()
+    } else {
+        four_angles
+            .iter()
+            .take(8)
+            .map(|d| {
+                format!(
+                    "  - **[{}]** `{}` (`{}:{}`) — {} → *{}*",
+                    d.angle, d.symbol, d.file, d.line, d.summary, d.recommendation
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
 
     CallToolResult::text(format!(
         r#"✅ **CHRONOS: File Analyzed**
@@ -115,13 +132,17 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
   - New edges linked: {edges_added}
   - Hydrated: {}/{} nodes
 
+**4-Angle Code Review Audit (`Reuse | Efficiency | Simplification | Altitude`):**
+{four_angle_section}
+
 **Provenance & Coverage (`_meta`):**
   - `_meta.provenance.untrusted_content`: `true` (parsed from external source AST)
   - `coverage.call_edges_available`: `{}`
 
 Next steps:
+- `chronos_explore` {{ query: "functionName" }} → 1-call verbatim snippet + verification surfaces + 4-angle audit
 - `chronos_query_hotspots` → performance & PageRank bottlenecks
-- `chronos_blast_radius` {{ symbol_name: "functionName", detail: "summary" }} → change impact
+- `chronos_blast_radius` {{ symbol_name: "functionName", detail: "summary" }} → change impact + structured findings
 - `chronos_contract_status` → check for breaking change alerts"#,
         report.total_nodes,
         report.function_nodes,

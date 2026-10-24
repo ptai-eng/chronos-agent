@@ -7,6 +7,7 @@
 //! - 🟡 Zone 2 HIGH: Transitive callers through hot-path functions  
 //! - 🟠 Zone 3 MEDIUM: Performance-sensitive paths that may be affected
 
+use crate::graph::query::{GraphQueryEngine, VerificationSurface};
 use crate::graph::schema::{ChronosGraph, ChronosNode, NodeId, NodeKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -89,6 +90,24 @@ impl Default for CoverageReport {
     }
 }
 
+/// Structured, line-anchored code review finding with concrete failure scenario.
+/// Inspired by Anthropic Claude Code `report-findings-tool.md` and OpenAI Codex `codex-auto-review.md`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StructuredFinding {
+    pub file: String,
+    /// 1-indexed source line number
+    pub line: usize,
+    pub summary: String,
+    /// Concise title (<= 60 characters)
+    pub short_summary: String,
+    /// Concrete trigger -> propagation -> observable failure sequence
+    pub failure_scenario: String,
+    /// `"correctness"` | `"efficiency"` | `"simplification"` | `"test-coverage"`
+    pub category: String,
+    /// `"CONFIRMED"` | `"PLAUSIBLE"`
+    pub verdict: String,
+}
+
 /// The full blast-radius analysis report
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlastRadiusReport {
@@ -122,6 +141,13 @@ pub struct BlastRadiusReport {
     pub hot_path_affected: bool,
     /// Whether any contract-breaking changes were detected
     pub contract_breaking: bool,
+    /// Real user-facing entrypoints (`ApiRoute`, `CliCommand`, `RootEntrypoint`, `TestCase`)
+    /// traced backwards from the changed node(s)
+    #[serde(default)]
+    pub verification_surfaces: Vec<VerificationSurface>,
+    /// Line-anchored structured findings with concrete failure scenarios
+    #[serde(default)]
+    pub structured_findings: Vec<StructuredFinding>,
 }
 
 impl BlastRadiusReport {
@@ -267,12 +293,123 @@ impl<'g> ImpactAnalyzer<'g> {
 
         // Zone 2.5: 5th-Dimension Git Temporal Co-Change Coupling (EdgeKind::CoChangesWith)
         let co_change_partners = self.graph.co_change_partners_of(changed_node_id);
+        let mut structured_findings: Vec<StructuredFinding> = Vec::new();
+        let changed_file = changed_node
+            .location
+            .file
+            .to_string_lossy()
+            .replace('\\', "/");
+        let changed_line = changed_node.location.start_line.max(1);
+
+        if contract_breaking {
+            for caller in direct_callers.iter().take(3) {
+                let caller_file = caller.location.file.to_string_lossy().replace('\\', "/");
+                let caller_line = caller.location.start_line.max(1);
+                structured_findings.push(StructuredFinding {
+                    file: caller_file.clone(),
+                    line: caller_line,
+                    summary: format!(
+                        "Contract-breaking modification in '{}' directly impacts caller '{}'",
+                        changed_node.name, caller.name
+                    ),
+                    short_summary: truncate_60(&format!(
+                        "Contract break on caller '{}'",
+                        caller.name
+                    )),
+                    failure_scenario: format!(
+                        "When '{}' is invoked at {}:{}, incompatible signature or return invariants in '{}' will cause a compile or runtime contract failure.",
+                        caller.name, caller_file, caller_line, changed_node.name
+                    ),
+                    category: "correctness".to_string(),
+                    verdict: "CONFIRMED".to_string(),
+                });
+            }
+        }
+
+        if changed_node.heuristics.linear_scan_in_loop > 0
+            || changed_node.heuristics.alloc_in_loop > 0
+            || changed_node.heuristics.transitive_loop_depth >= 3
+        {
+            structured_findings.push(StructuredFinding {
+                file: changed_file.clone(),
+                line: changed_line,
+                summary: format!(
+                    "Algorithmic loop amplification in '{}' (transitive_loop_depth={}, linear_scan_in_loop={}, alloc_in_loop={})",
+                    changed_node.name,
+                    changed_node.heuristics.transitive_loop_depth,
+                    changed_node.heuristics.linear_scan_in_loop,
+                    changed_node.heuristics.alloc_in_loop
+                ),
+                short_summary: truncate_60(&format!(
+                    "Loop amplification in '{}'",
+                    changed_node.name
+                )),
+                failure_scenario: format!(
+                    "Under non-trivial input sizes, '{}' executes nested iteration/linear scans across {} upstream caller(s), risking p99 latency spikes.",
+                    changed_node.name,
+                    direct_count + transitive_count
+                ),
+                category: "efficiency".to_string(),
+                verdict: "CONFIRMED".to_string(),
+            });
+        }
+
+        if changed_node.heuristics.cyclomatic_complexity >= 5
+            || changed_node.heuristics.cognitive_load_score >= 25.0
+        {
+            structured_findings.push(StructuredFinding {
+                file: changed_file.clone(),
+                line: changed_line,
+                summary: format!(
+                    "High control-flow complexity in '{}' (cyclomatic={}, cognitive_load={:.0})",
+                    changed_node.name,
+                    changed_node.heuristics.cyclomatic_complexity,
+                    changed_node.heuristics.cognitive_load_score
+                ),
+                short_summary: truncate_60(&format!(
+                    "High branch complexity in '{}'",
+                    changed_node.name
+                )),
+                failure_scenario: format!(
+                    "Modifying deeply nested branches in '{}' at {}:{} without guard-clause simplification increases unhandled edge-case regressions.",
+                    changed_node.name, changed_file, changed_line
+                ),
+                category: "simplification".to_string(),
+                verdict: "PLAUSIBLE".to_string(),
+            });
+        }
+
+        if self.graph.find_covering_tests(changed_node_id).is_empty()
+            && (direct_count > 0 || changed_node.heuristics.cyclomatic_complexity >= 2)
+        {
+            structured_findings.push(StructuredFinding {
+                file: changed_file.clone(),
+                line: changed_line,
+                summary: format!(
+                    "Symbol '{}' has {} direct caller(s) but 0 covering TestCase edges",
+                    changed_node.name, direct_count
+                ),
+                short_summary: truncate_60(&format!(
+                    "Missing test coverage for '{}'",
+                    changed_node.name
+                )),
+                failure_scenario: format!(
+                    "Behavioral regressions introduced in '{}' at {}:{} will not be caught by existing unit tests before reaching {} caller(s).",
+                    changed_node.name, changed_file, changed_line, direct_count
+                ),
+                category: "test-coverage".to_string(),
+                verdict: "CONFIRMED".to_string(),
+            });
+        }
+
         for (partner, confidence_pct) in co_change_partners {
             let id_str = partner.id.to_string();
             if seen.contains(&id_str) {
                 continue;
             }
             seen.insert(id_str);
+            let partner_file = partner.location.file.to_string_lossy().replace('\\', "/");
+            let partner_line = partner.location.start_line.max(1);
             let score = ((confidence_pct as f32) / 100.0 * 0.65).clamp(0.30, 0.65);
             affected_nodes.push(AffectedNode {
                 node_name: partner.name.clone(),
@@ -286,7 +423,28 @@ impl<'g> ImpactAnalyzer<'g> {
                 reason: format!("Git temporal co-change partner ({}% confidence)", confidence_pct),
                 impact_score: score,
             });
+            structured_findings.push(StructuredFinding {
+                file: partner_file.clone(),
+                line: partner_line,
+                summary: format!(
+                    "Temporal co-change coupling ({}% confidence) between '{}' and '{}'",
+                    confidence_pct, changed_node.name, partner.name
+                ),
+                short_summary: truncate_60(&format!(
+                    "Co-change drift risk with '{}'",
+                    partner.name
+                )),
+                failure_scenario: format!(
+                    "Historical commits modify '{}' ({}:{}) alongside '{}' {}% of the time; updating only one side risks schema or state desynchronization.",
+                    partner.name, partner_file, partner_line, changed_node.name, confidence_pct
+                ),
+                category: "correctness".to_string(),
+                verdict: "PLAUSIBLE".to_string(),
+            });
         }
+
+        let qe = GraphQueryEngine::new(self.graph);
+        let verification_surfaces = qe.trace_verification_surfaces(changed_node_id, 5);
 
         // Zone 3: Performance risk from changed node itself (incorporating PageRank)
         let self_impact = compute_node_impact(changed_node, contract_breaking, pagerank_score);
@@ -322,6 +480,8 @@ impl<'g> ImpactAnalyzer<'g> {
             transitive_callers_count: transitive_count,
             hot_path_affected,
             contract_breaking,
+            verification_surfaces,
+            structured_findings,
         }
     }
 
@@ -343,6 +503,8 @@ impl<'g> ImpactAnalyzer<'g> {
                 transitive_callers_count: 0,
                 hot_path_affected: false,
                 contract_breaking: false,
+                verification_surfaces: vec![],
+                structured_findings: vec![],
             };
         }
 
@@ -377,9 +539,28 @@ impl<'g> ImpactAnalyzer<'g> {
             .into_iter()
             .collect();
 
-        let mut all_nodes: Vec<AffectedNode> = reports.into_iter()
-            .flat_map(|r| r.affected_nodes)
-            .collect();
+        let mut seen_surf = HashSet::new();
+        let mut all_surfaces: Vec<VerificationSurface> = Vec::new();
+        let mut seen_find = HashSet::new();
+        let mut all_findings: Vec<StructuredFinding> = Vec::new();
+        let mut all_nodes: Vec<AffectedNode> = Vec::new();
+
+        for r in reports {
+            for s in r.verification_surfaces {
+                let key = format!("{}:{}:{}", s.surface_kind, s.file, s.name);
+                if seen_surf.insert(key) {
+                    all_surfaces.push(s);
+                }
+            }
+            for f in r.structured_findings {
+                let key = format!("{}:{}:{}", f.file, f.line, f.short_summary);
+                if seen_find.insert(key) {
+                    all_findings.push(f);
+                }
+            }
+            all_nodes.extend(r.affected_nodes);
+        }
+
         all_nodes.sort_by(|a, b| {
             b.impact_score.partial_cmp(&a.impact_score)
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -402,6 +583,8 @@ impl<'g> ImpactAnalyzer<'g> {
             transitive_callers_count: total_transitive,
             hot_path_affected: any_hot_path,
             contract_breaking: any_contract,
+            verification_surfaces: all_surfaces,
+            structured_findings: all_findings,
         }
     }
 
@@ -423,7 +606,19 @@ impl<'g> ImpactAnalyzer<'g> {
             transitive_callers_count: 0,
             hot_path_affected: false,
             contract_breaking,
+            verification_surfaces: vec![],
+            structured_findings: vec![],
         }
+    }
+}
+
+fn truncate_60(s: &str) -> String {
+    if s.chars().count() <= 60 {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(57).collect();
+        out.push_str("...");
+        out
     }
 }
 

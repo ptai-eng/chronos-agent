@@ -358,6 +358,8 @@ mod tests {
             transitive_callers_count: 7,
             hot_path_affected: true,
             contract_breaking: true,
+            verification_surfaces: vec![],
+            structured_findings: vec![],
         };
 
         let html = generate_html_dashboard(&report);

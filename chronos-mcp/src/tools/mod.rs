@@ -1,8 +1,9 @@
-//! # Tools module — all 11 CHRONOS MCP tools
+//! # Tools module — all 12 CHRONOS MCP tools
 
 pub mod analyze_file;
 pub mod blast_radius;
 pub mod contract_status;
+pub mod explore;
 pub mod generate_agents_md;
 pub mod get_architecture;
 pub mod get_snippet;
@@ -280,6 +281,11 @@ pub fn all_tools() -> Vec<McpTool> {
                         "description": "If true (with write_to_disk=true), also scaffolds native MCP configs, skills, and slash commands for the target client",
                         "default": false
                     },
+                    "with_hooks": {
+                        "type": "boolean",
+                        "description": "If true (with write_to_disk=true), also scaffolds <20ms lifecycle hook configs (.agents/hooks.json, .claude/settings.json)",
+                        "default": false
+                    },
                     "output_path": {
                         "type": "string",
                         "description": "Optional relative workspace path override when writing a single context file"
@@ -293,12 +299,44 @@ pub fn all_tools() -> Vec<McpTool> {
                 "required": []
             }),
         },
+        McpTool {
+            name: "chronos_explore",
+            description: "1-Call Subagent Context Engine (<15ms). Answers code exploration questions in a single call \
+                          by returning the top BM25/regex matching symbols, their verbatim source code (start_line..=end_line), \
+                          caller/callee chains, covering tests, user-facing verification surfaces (ApiRoute, CliCommand, RootEntrypoint), \
+                          and 4-angle code review diagnostics (Reuse, Efficiency, Simplification, Altitude).",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural-language question, symbol name, or regex pattern to explore"
+                    },
+                    "file_filter": {
+                        "type": "string",
+                        "description": "Optional file path substring or regex filter"
+                    },
+                    "max_symbols": {
+                        "type": "integer",
+                        "description": "Maximum number of symbol bundles to return (default: 3, ceiling: 10)",
+                        "default": 3
+                    },
+                    "auto_index": {
+                        "type": "boolean",
+                        "description": "Automatically scan and incrementally index workspace on cold start (default: true)",
+                        "default": true
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
     ]
 }
 
 pub use analyze_file::handle_analyze_file;
 pub use blast_radius::handle_blast_radius;
 pub use contract_status::handle_contract_status;
+pub use explore::handle_explore;
 pub use generate_agents_md::handle_generate_agents_md;
 pub use get_architecture::handle_get_architecture;
 pub use get_snippet::handle_get_snippet;

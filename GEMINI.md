@@ -6,38 +6,39 @@
 
 - **Rust Build:** `cargo build --workspace -j 4`
 - **Rust Test Suite:** `cargo test --workspace -j 4`
+- **1-Call Subagent Context (`chronos explore`):** `chronos explore "<query>" --workspace .`
 - **5D Git Diff Blast-Radius Gate (CI / Pre-PR):** `chronos diff --staged --json --ci`
-- **Refresh Multi-Agent Context Files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`):** `chronos init --client all`
+- **Refresh Multi-Agent Context Files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`):** `chronos init --client all --with-hooks`
 
 ## 2. Antigravity Workspace Customizations & MCP Protocol
 
 This workspace ships native Antigravity customizations under `.agents/skills/chronos-agent/SKILL.md` and `.agents/plugins/chronos-agent/`. Always follow this 4-step 5D verification loop:
 
-1. **Locate & Read Without Context Bloat:** Call `chronos_get_architecture`, `chronos_search_graph` (BM25 + regex + loop depth), or `chronos_get_snippet` instead of dumping entire files.
-2. **Pre-Edit Blast-Radius Check:** Before modifying any function listed in **High-Centrality Hubs** below, call `chronos_blast_radius` (`symbol_name`, `contract_breaking`) to inspect transitive callers, 95% confidence bounds, and Git co-change partners.
-3. **Contract Broker Gate:** After editing public signatures or routes, call `chronos_contract_status` to drain breaking-change alerts across callers.
+1. **Locate & Read Without Context Bloat:** Call `chronos_explore` (1-call BM25 + verbatim snippets + verification surfaces + 4-angle audit), `chronos_get_architecture`, `chronos_search_graph`, or `chronos_get_snippet` instead of dumping entire files.
+2. **Pre-Edit Blast-Radius Check:** Before modifying any function listed in **High-Centrality Hubs** below, call `chronos_blast_radius` (`symbol_name`, `contract_breaking`) to inspect transitive callers, `verification_surfaces`, `structured_findings` (`failure_scenario`), 95% confidence bounds, and Git co-change partners.
+3. **Contract Broker & 4-Angle Review Gate:** After editing public signatures or routes, call `chronos_contract_status` and `chronos_analyze_file` (`detail: "complete"`) to drain breaking-change alerts and 4-angle review diagnostics (`Reuse`, `Efficiency`, `Simplification`, `Altitude`).
 4. **Super-Mutant Verification Gate:** Before finalizing a PR on critical logic, run `chronos_mutation_gate` (`file_path`) to verify unit tests kill synthetic code mutants.
 
 ## 3. 5D Knowledge Graph Snapshot
 
-- **Indexed Symbols:** `551` nodes (`348` functions, `101` tests) | **Directed Edges:** `1211` (`1525` resolved calls, `3094` unresolved dynamic calls)
-- **Language Distribution:** Rust (523), TypeScript (25), C (3)
+- **Indexed Symbols:** `567` nodes (`359` functions, `101` tests) | **Directed Edges:** `1262` (`1618` resolved calls, `3285` unresolved dynamic calls)
+- **Language Distribution:** Rust (539), TypeScript (25), C (3)
 - **Runtime Telemetry Hydrated:** `Cold-Start Static + PageRank Mode` (`0` hot paths, `0` bottlenecks)
 
 ## 4. Architectural Modules (Label-Propagation Communities)
 
 | Module Cluster | Symbols | Internal Cohesion | Primary Symbols |
 | :--- | :---: | :---: | :--- |
-| `graph/schema` | 58 | 51% | `new`, `default`, `add_node`, `status_report` |
-| `graph/query` | 32 | 48% | `new`, `from_node`, `default`, `all_nodes` |
-| `ast/ts_parser` | 30 | 87% | `new`, `node_text`, `parse_source`, `extract_symbols` |
-| `graph/agents_md` | 30 | 41% | `new`, `synthesize_target_context`, `validate_readonly_cypher`, `ensure_schema` |
+| `graph/schema` | 60 | 49% | `new`, `default`, `add_node`, `status_report` |
+| `graph/query` | 40 | 51% | `new`, `from_node`, `all_nodes`, `default` |
+| `graph/agents_md` | 31 | 41% | `new`, `synthesize_target_context`, `resolve_project_name`, `validate_readonly_cypher` |
+| `ast/ts_parser` | 30 | 86% | `new`, `node_text`, `parse_source`, `extract_symbols` |
+| `blast_radius/impact_matrix` | 24 | 45% | `new`, `analyze`, `build_coverage_and_unknowns`, `from_score` |
 | `ast/polyglot_parser` | 22 | 86% | `node_text`, `new`, `extract_routes_and_http_calls_from_source`, `populate_ast_complexity_metrics` |
-| `blast_radius/impact_matrix` | 22 | 44% | `new`, `analyze`, `build_coverage_and_unknowns`, `from_score` |
 | `mutation/operators` | 21 | 65% | `new`, `generate_mutants`, `description`, `detect_return_statement` |
+| `tests/integration_test` | 21 | 33% | `new`, `nodes_by_kind`, `ingest_parsed_module`, `all_nodes` |
 | `tests/persistent_test` | 20 | 46% | `NodeId`, `open`, `new`, `load_into_graph` |
-| `contract/signature` | 19 | 85% | `from_source`, `extract_exported_functions`, `extract_api_routes`, `diff` |
-| `tests/integration_test` | 19 | 32% | `new`, `nodes_by_kind`, `ingest_parsed_module`, `all_nodes` |
+| `contract/signature` | 19 | 85% | `from_source`, `extract_api_routes`, `extract_exported_functions`, `diff` |
 | `ast/diff` | 18 | 70% | `new`, `compute_module_diff`, `is_contract_breaking`, `add_change` |
 | `telemetry/cdp_client` | 18 | 65% | `default`, `rand_factor`, `is_available`, `backend_name` |
 
@@ -47,16 +48,16 @@ Modifying these structural hubs affects the largest transitive caller trees. **A
 
 | Symbol | Kind | File | PageRank | Fan-In | Fan-Out | Transitive Loop Depth |
 | :--- | :---: | :--- | :---: | :---: | :---: | :---: |
-| `new` | `Function` | `chronos-core/src/graph/schema.rs:295` | `0.0210` | 16 | 2 | 0 |
+| `new` | `Function` | `chronos-core/src/graph/schema.rs:295` | `0.0211` | 16 | 2 | 0 |
 | `new` | `Function` | `chronos-core/src/contract/broker.rs:49` | `0.0190` | 24 | 0 | 0 |
-| `new` | `Function` | `chronos-core/src/telemetry/adapter.rs:116` | `0.0162` | 32 | 0 | 0 |
-| `NodeId` | `Class` | `chronos-core/src/graph/schema.rs:24` | `0.0135` | 6 | 0 | 0 |
+| `new` | `Function` | `chronos-core/src/telemetry/adapter.rs:116` | `0.0162` | 34 | 0 | 0 |
+| `NodeId` | `Class` | `chronos-core/src/graph/schema.rs:24` | `0.0134` | 6 | 0 | 0 |
 | `default` | `Function` | `chronos-core/src/graph/schema.rs:1104` | `0.0117` | 3 | 1 | 0 |
-| `ok` | `Function` | `chronos-mcp/src/protocol.rs:40` | `0.0110` | 16 | 0 | 0 |
-| `new` | `Function` | `chronos-core/src/mutation/operators.rs:86` | `0.0091` | 10 | 0 | 0 |
-| `new` | `Function` | `chronos-core/src/ast/ts_parser.rs:86` | `0.0076` | 14 | 0 | 0 |
-| `node_text` | `Function` | `chronos-core/src/ast/ts_parser.rs:612` | `0.0069` | 8 | 0 | 0 |
-| `add_node` | `Function` | `chronos-core/src/graph/schema.rs:341` | `0.0069` | 24 | 0 | 0 |
+| `ok` | `Function` | `chronos-mcp/src/protocol.rs:40` | `0.0107` | 16 | 0 | 0 |
+| `new` | `Function` | `chronos-core/src/mutation/operators.rs:86` | `0.0088` | 10 | 0 | 0 |
+| `new` | `Function` | `chronos-core/src/ast/ts_parser.rs:86` | `0.0075` | 14 | 0 | 0 |
+| `new` | `Function` | `chronos-core/src/graph/query.rs:252` | `0.0072` | 13 | 0 | 0 |
+| `node_text` | `Function` | `chronos-core/src/ast/ts_parser.rs:612` | `0.0067` | 8 | 0 | 0 |
 
 ## 6. Algorithmic Complexity & Loop Hotspots
 
@@ -66,12 +67,12 @@ Functions with interprocedural nested loops (`transitive_loop_depth >= 2`), line
 - **`sync_workspace_incremental`** (`chronos-core/src/graph/persistent.rs:482`) — `transitive_loop_depth=10`, `linear_scan_in_loop=1`, `alloc_in_loop=1`, `recursive=false`
 - **`handle_generate_agents_md`** (`chronos-mcp/src/tools/generate_agents_md.rs:16`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=1`, `recursive=false`
 - **`handle_request`** (`chronos-mcp/src/server.rs:63`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
+- **`handle_analyze_file`** (`chronos-mcp/src/tools/analyze_file.rs:13`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
 - **`start`** (`chronos-mcp/src/watcher.rs:33`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=3`, `recursive=false`
 - **`extract_symbols`** (`chronos-core/src/ast/ts_parser.rs:137`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=true`
-- **`handle_analyze_file`** (`chronos-mcp/src/tools/analyze_file.rs:13`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
+- **`handle_explore`** (`chronos-mcp/src/tools/explore.rs:19`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
 - **`visit_node`** (`chronos-core/src/ast/py_parser.rs:124`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=true`
-- **`handle_get_architecture`** (`chronos-mcp/src/tools/get_architecture.rs:16`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
-- **`recurse_children`** (`chronos-core/src/ast/ts_parser.rs:214`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=true`
+- **`v1_6_explore_verification_surfaces_structured_findings_and_4_angle_audit`** (`chronos-core/tests/integration_test.rs:469`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
 
 ## 7. Cross-Boundary API Routes (Frontend <-> Backend Stitched)
 
@@ -97,10 +98,10 @@ Files that historically change together in Git commits. When modifying the left 
 - `assets/chronos_benchmark_radar.svg` $\rightarrow$ `README.md` (**100%** co-change confidence)
 - `assets/chronos_benchmark_radar.svg` $\rightarrow$ `assets/chronos_architecture.svg` (**100%** co-change confidence)
 - `assets/chronos_benchmark_radar.svg` $\rightarrow$ `assets/chronos_radar_dashboard.svg` (**100%** co-change confidence)
+- `assets/chronos_radar_dashboard.svg` $\rightarrow$ `assets/chronos_architecture.svg` (**100%** co-change confidence)
 - `assets/chronos_radar_dashboard.svg` $\rightarrow$ `README.md` (**100%** co-change confidence)
 - `assets/chronos_radar_dashboard.svg` $\rightarrow$ `assets/chronos_benchmark_radar.svg` (**100%** co-change confidence)
-- `assets/chronos_radar_dashboard.svg` $\rightarrow$ `assets/chronos_architecture.svg` (**100%** co-change confidence)
-- `chronos-core/Cargo.toml` $\rightarrow$ `Cargo.lock` (**100%** co-change confidence)
 - `chronos-core/Cargo.toml` $\rightarrow$ `Cargo.toml` (**100%** co-change confidence)
-- `chronos-core/src/ast/dispatcher.rs` $\rightarrow$ `chronos-core/src/ast/mod.rs` (**100%** co-change confidence)
+- `chronos-core/Cargo.toml` $\rightarrow$ `Cargo.lock` (**100%** co-change confidence)
+- `chronos-core/src/ast/dispatcher.rs` $\rightarrow$ `chronos-core/src/ast/rs_parser.rs` (**100%** co-change confidence)
 

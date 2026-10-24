@@ -255,19 +255,18 @@ This skill connects **Google Antigravity (`agy`)**, **Claude Code**, **OpenAI Co
 
 - **Top PageRank Hubs:** {hubs_summary}
 
-## Mandatory 4-Step Verification Workflow
+## Mandatory 4-Step Verification Workflow (12 MCP Tools)
 
-1. **Graph Discovery First (Zero Context Bloat):**
-   - Call `chronos_get_architecture` to inspect Label-Propagation community clusters, cohesion scores, and $O(N^2)$ loop hotspots.
-   - Call `chronos_search_graph` (BM25 + regex + `min_loop_depth`) or `chronos_get_snippet` to read exact function spans (`start_line..=end_line`) with callers, callees, and covering tests.
-   - Call `chronos_query_graph` for custom read-only OpenCypher queries over `ChronosNode` (`CALLS`, `CONTAINS`, `TESTS`, `IMPORTS`, `CO_CHANGES_WITH`).
+1. **1-Call Subagent Discovery (`chronos_explore` — Zero Context Bloat):**
+   - Call `chronos_explore` (`query`, `file_filter`, `max_symbols`) to get top BM25 symbols, verbatim source code (`start_line..=end_line`), caller/callee topology, user-facing `verification_surfaces`, and `four_angle_diagnostics` (`Reuse`, `Efficiency`, `Simplification`, `Altitude`) in a single `<15ms` call.
+   - Or call `chronos_get_architecture`, `chronos_search_graph`, `chronos_get_snippet`, and `chronos_query_graph` (OpenCypher over `CALLS`, `CONTAINS`, `TESTS`, `IMPORTS`, `CO_CHANGES_WITH`).
 
-2. **Pre-Edit 5D Blast-Radius Gate:**
+2. **Pre-Edit 5D Blast-Radius & Structured Findings Gate:**
    - Before modifying any public function, struct, or HTTP route, call `chronos_blast_radius` (`symbol_name`, `contract_breaking: true/false`, `detail: "summary"`).
-   - Inspect the `confidence_interval`, `residual_unknowns`, and Git temporal co-change partners (`CO_CHANGES_WITH`).
+   - Inspect `verification_surfaces` (real API routes / CLI commands / root entrypoints to exercise), `structured_findings` (line-anchored `failure_scenario` + `CONFIRMED`/`PLAUSIBLE` verdicts), `confidence_interval`, and Git `CO_CHANGES_WITH` partners.
 
-3. **Semantic Contract Broker Check:**
-   - After modifying function signatures or API endpoints, call `chronos_contract_status` to ensure no downstream callers were broken.
+3. **Semantic Contract Broker & 4-Angle Review Check:**
+   - Call `chronos_analyze_file` (`file_path`, `detail: "complete"`) to inspect 4-Angle Code Review diagnostics (`Reuse` duplicate candidates, `Efficiency` loop scans, `Simplification` nesting depth, `Altitude` hub centrality) and `chronos_contract_status` to drain breaking signature alerts.
 
 4. **Super-Mutant Verification Gate:**
    - Before completing a task on core business logic, run `chronos_mutation_gate` (`file_path`) or `chronos diff --staged --json --ci` to verify that unit tests kill synthetic code mutants.
@@ -282,6 +281,26 @@ pub fn scaffold_client_files(
     target: AgentTarget,
     mcp_binary: &str,
     project_name_override: Option<&str>,
+) -> Vec<ScaffoldedFile> {
+    scaffold_client_files_with_options(
+        graph,
+        workspace,
+        target,
+        mcp_binary,
+        project_name_override,
+        false,
+    )
+}
+
+/// Generate the complete set of native config, rule, skill, slash-command, and optional `<20ms`
+/// lifecycle hook files (`.agents/hooks.json`, `.claude/settings.json`) for `target`.
+pub fn scaffold_client_files_with_options(
+    graph: &ChronosGraph,
+    workspace: &Path,
+    target: AgentTarget,
+    mcp_binary: &str,
+    project_name_override: Option<&str>,
+    with_hooks: bool,
 ) -> Vec<ScaffoldedFile> {
     let project_name = resolve_project_name(workspace, project_name_override);
     let mut files = Vec::new();
@@ -343,6 +362,35 @@ args = ["--workspace", "."]
             .unwrap_or_default()
                 + "\n",
         });
+        if with_hooks {
+            files.push(ScaffoldedFile {
+                relative_path: ".agents/hooks.json".to_string(),
+                target_client: "Google Antigravity Zero-Latency Lifecycle Hooks (.agents/hooks.json)".to_string(),
+                content: serde_json::to_string_pretty(&json!({
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "type": "command",
+                                "command": "chronos hook session-start --workspace . --client antigravity"
+                            }
+                        ],
+                        "PostToolUse": [
+                            {
+                                "matcher": "edit_file|write_file",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "chronos hook post-edit --workspace . --client antigravity"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }))
+                .unwrap_or_default()
+                    + "\n",
+            });
+        }
     }
 
     // 3. Anthropic Claude Code CLI & Claude Desktop
@@ -370,15 +418,54 @@ args = ["--workspace", "."]
         files.push(ScaffoldedFile {
             relative_path: ".claude/commands/chronos-audit.md".to_string(),
             target_client: "Claude Code Slash Command (/project:chronos-audit)".to_string(),
-            content: r#"Run a full 5D CHRONOS architectural, blast-radius, and mutation audit on `$ARGUMENTS`:
+            content: r#"Run a full 5D CHRONOS architectural, 4-angle review, blast-radius, and mutation audit on `$ARGUMENTS`:
 
-1. Call `chronos_get_architecture` to inspect community clusters, PageRank hubs, and $O(N^2)$ loop hotspots.
-2. Call `chronos_blast_radius` on the target symbol or file in `$ARGUMENTS` (`detail: "complete"`) and report the `RiskZone`, 95% `confidence_interval`, `residual_unknowns`, and Git `CO_CHANGES_WITH` partners.
+1. Call `chronos_explore` on `$ARGUMENTS` to retrieve verbatim source snippets, caller/callee chains, `verification_surfaces` (real API/CLI entrypoints), and 4-Angle Code Review diagnostics (`Reuse`, `Efficiency`, `Simplification`, `Altitude`).
+2. Call `chronos_blast_radius` on the target symbol or file in `$ARGUMENTS` (`detail: "complete"`) and report the `RiskZone`, 95% `confidence_interval`, `structured_findings` (`failure_scenario`), `residual_unknowns`, and Git `CO_CHANGES_WITH` partners.
 3. Call `chronos_contract_status` to check for any breaking signature drift.
-4. If code changes were made, call `chronos_mutation_gate` to verify semantic test coverage.
+4. If code changes were made, call `chronos_mutation_gate` to verify semantic test coverage and exercise the reported `verification_surfaces`.
 "#
             .to_string(),
         });
+        if with_hooks {
+            files.push(ScaffoldedFile {
+                relative_path: ".claude/settings.json".to_string(),
+                target_client: "Claude Code Permissions & Lifecycle Hooks (.claude/settings.json)".to_string(),
+                content: serde_json::to_string_pretty(&json!({
+                    "permissions": {
+                        "allow": [
+                            "mcp__chronos-agent__*"
+                        ]
+                    },
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "matcher": "*",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "chronos hook session-start --workspace . --client claude"
+                                    }
+                                ]
+                            }
+                        ],
+                        "PostToolUse": [
+                            {
+                                "matcher": "Edit|MultiEdit|Write",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "chronos hook post-edit --workspace . --client claude"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }))
+                .unwrap_or_default()
+                    + "\n",
+            });
+        }
     }
 
     // 4. OpenCode CLI (opencode)
@@ -507,19 +594,20 @@ fn append_build_commands(out: &mut String, workspace: &Path) {
     for (label, cmd) in &detected_cmds {
         out.push_str(&format!("- **{label}:** `{cmd}`\n"));
     }
+    out.push_str("- **1-Call Subagent Context (`chronos explore`):** `chronos explore \"<query>\" --workspace .`\n");
     out.push_str("- **5D Git Diff Blast-Radius Gate (CI / Pre-PR):** `chronos diff --staged --json --ci`\n");
-    out.push_str("- **Refresh Multi-Agent Context Files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`):** `chronos init --client all`\n\n");
+    out.push_str("- **Refresh Multi-Agent Context Files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`):** `chronos init --client all --with-hooks`\n\n");
 }
 
 fn append_4_step_protocol(out: &mut String) {
     out.push_str(
-        "1. **Locate & Read Without Context Bloat:** Call `chronos_get_architecture`, `chronos_search_graph` (BM25 + regex + loop depth), or `chronos_get_snippet` instead of dumping entire files.\n",
+        "1. **Locate & Read Without Context Bloat:** Call `chronos_explore` (1-call BM25 + verbatim snippets + verification surfaces + 4-angle audit), `chronos_get_architecture`, `chronos_search_graph`, or `chronos_get_snippet` instead of dumping entire files.\n",
     );
     out.push_str(
-        "2. **Pre-Edit Blast-Radius Check:** Before modifying any function listed in **High-Centrality Hubs** below, call `chronos_blast_radius` (`symbol_name`, `contract_breaking`) to inspect transitive callers, 95% confidence bounds, and Git co-change partners.\n",
+        "2. **Pre-Edit Blast-Radius Check:** Before modifying any function listed in **High-Centrality Hubs** below, call `chronos_blast_radius` (`symbol_name`, `contract_breaking`) to inspect transitive callers, `verification_surfaces`, `structured_findings` (`failure_scenario`), 95% confidence bounds, and Git co-change partners.\n",
     );
     out.push_str(
-        "3. **Contract Broker Gate:** After editing public signatures or routes, call `chronos_contract_status` to drain breaking-change alerts across callers.\n",
+        "3. **Contract Broker & 4-Angle Review Gate:** After editing public signatures or routes, call `chronos_contract_status` and `chronos_analyze_file` (`detail: \"complete\"`) to drain breaking-change alerts and 4-angle review diagnostics (`Reuse`, `Efficiency`, `Simplification`, `Altitude`).\n",
     );
     out.push_str(
         "4. **Super-Mutant Verification Gate:** Before finalizing a PR on critical logic, run `chronos_mutation_gate` (`file_path`) to verify unit tests kill synthetic code mutants.\n\n",

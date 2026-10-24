@@ -64,6 +64,28 @@ pub fn generate_glance_markdown(report: &BlastRadiusReport) -> String {
         lines.push(format!("**API endpoints affected:** {}", routes.join(", ")));
     }
 
+    // Line 7: Verification Surfaces (if any)
+    if !report.verification_surfaces.is_empty() {
+        let surfs: Vec<String> = report
+            .verification_surfaces
+            .iter()
+            .take(3)
+            .map(|s| format!("`{}` [{}:{} hop]", s.name, s.surface_kind, s.hop_distance))
+            .collect();
+        lines.push(format!("**Verification Surfaces:** {}", surfs.join(", ")));
+    }
+
+    // Line 8: Structured Findings (if any)
+    if !report.structured_findings.is_empty() {
+        let findings: Vec<String> = report
+            .structured_findings
+            .iter()
+            .take(3)
+            .map(|f| format!("[{}:{}] `{}:{}` — {}", f.verdict, f.category, f.file, f.line, f.short_summary))
+            .collect();
+        lines.push(format!("**Structured Findings:** {}", findings.join(" | ")));
+    }
+
     // Dashboard hint for high risk
     if report.needs_visual_dashboard() {
         lines.push("\n> 📊 Full blast-radius dashboard: Run `chronos glance --html` for interactive visualization.".to_string());
@@ -114,6 +136,8 @@ mod tests {
             transitive_callers_count: transitive,
             hot_path_affected: hot,
             contract_breaking: contract,
+            verification_surfaces: vec![],
+            structured_findings: vec![],
         }
     }
 

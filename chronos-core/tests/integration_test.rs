@@ -465,4 +465,149 @@ export function checkoutHandler(items: string[]): boolean {
     assert!(md.contains("Algorithmic Complexity & Loop Hotspots"));
 }
 
+#[test]
+fn v1_6_explore_verification_surfaces_structured_findings_and_4_angle_audit() {
+    let mut parser = TypeScriptParser::new().unwrap();
+    let src_orders = r#"
+export function validateOrderItemsWithDiscount(
+    items: string[],
+    blockedSkus: string[],
+    coupons: string[]
+): boolean {
+    for (const item of items) {
+        if (blockedSkus.includes(item)) {
+            if (coupons.length > 0) {
+                if (item.startsWith("VIP")) {
+                    if (item.length > 5) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
+export function createOrderController(items: string[]): boolean {
+    return validateOrderItemsWithDiscount(items, ["BAD"], ["SAVE10"]);
+}
+"#;
+    let src_billing = r#"
+export function validateOrderItemsWithPromo(
+    items: string[],
+    blockedSkus: string[]
+): boolean {
+    for (const item of items) {
+        if (blockedSkus.includes(item)) {
+            return false;
+        }
+    }
+    return true;
+}
+"#;
+    let parsed_orders = parser
+        .parse_source(&PathBuf::from("src/orders.ts"), src_orders)
+        .unwrap();
+    let parsed_billing = parser
+        .parse_source(&PathBuf::from("src/billing.ts"), src_billing)
+        .unwrap();
+
+    let mut graph = ChronosGraph::new();
+    graph.ingest_parsed_module(&parsed_orders);
+    graph.ingest_parsed_module(&parsed_billing);
+    graph.resolve_pending_calls_and_routes();
+
+    let qe = GraphQueryEngine::new(&graph);
+    let explore = qe.explore_graph("validateOrderItemsWithDiscount", None, 3);
+    assert!(
+        explore.symbols_returned >= 1,
+        "chronos_explore should return matching symbol bundle"
+    );
+    assert!(
+        !explore.verification_surfaces.is_empty(),
+        "Should trace back to root entrypoint createOrderController"
+    );
+    assert!(
+        explore
+            .verification_surfaces
+            .iter()
+            .any(|s| s.name == "createOrderController"),
+        "createOrderController should be discovered as a verification surface"
+    );
+
+    // Check 4-Angle Review Diagnostics: Reuse + Efficiency + Simplification
+    let angles: Vec<&str> = explore
+        .four_angle_diagnostics
+        .iter()
+        .map(|d| d.angle.as_str())
+        .collect();
+    assert!(
+        angles.contains(&"Reuse"),
+        "Should detect Reuse candidate validateOrderItemsWithPromo across files, got: {:?}",
+        angles
+    );
+    assert!(
+        angles.contains(&"Efficiency"),
+        "Should detect Efficiency issue (linear_scan_in_loop), got: {:?}",
+        angles
+    );
+    assert!(
+        angles.contains(&"Simplification"),
+        "Should detect Simplification issue (nesting_depth >= 4), got: {:?}",
+        angles
+    );
+
+    // Check Blast-Radius Structured Findings & Verification Surfaces
+    let target_id = graph
+        .nodes_by_kind(&NodeKind::Function)
+        .into_iter()
+        .find(|n| n.name == "validateOrderItemsWithDiscount")
+        .unwrap()
+        .id
+        .clone();
+    let analyzer = ImpactAnalyzer::new(&graph);
+    let br = analyzer.analyze(&target_id, true);
+    assert!(
+        !br.verification_surfaces.is_empty(),
+        "BlastRadiusReport should embed verification_surfaces"
+    );
+    assert!(
+        !br.structured_findings.is_empty(),
+        "BlastRadiusReport should embed structured_findings"
+    );
+    for finding in &br.structured_findings {
+        assert!(finding.line >= 1, "line must be 1-indexed");
+        assert!(
+            finding.short_summary.chars().count() <= 60,
+            "short_summary must be <= 60 chars"
+        );
+        assert!(!finding.failure_scenario.is_empty());
+    }
+}
+
+#[test]
+fn v1_6_scaffold_client_files_with_hooks_generates_antigravity_and_claude_hooks() {
+    use chronos_core::graph::agents_md::{scaffold_client_files_with_options, AgentTarget};
+
+    let graph = ChronosGraph::new();
+    let files = scaffold_client_files_with_options(
+        &graph,
+        std::path::Path::new("."),
+        AgentTarget::All,
+        "chronos-mcp",
+        Some("chronos-agent"),
+        true,
+    );
+    assert_eq!(
+        files.len(),
+        20,
+        "Universal scaffold with hooks should produce 20 files (18 base + 2 hooks)"
+    );
+    assert!(files.iter().any(|f| f.relative_path == ".agents/hooks.json"));
+    assert!(files
+        .iter()
+        .any(|f| f.relative_path == ".claude/settings.json"));
+}
+
+
 

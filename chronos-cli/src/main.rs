@@ -192,12 +192,37 @@ enum Commands {
         /// Custom MCP server binary command (default: "chronos-mcp")
         #[arg(long, default_value = "chronos-mcp")]
         binary: String,
+        /// Also scaffold zero-latency (<20ms) lifecycle hook configs (.agents/hooks.json, .claude/settings.json)
+        #[arg(long)]
+        with_hooks: bool,
     },
-    /// Export all 11 CHRONOS tool schemas for OpenAI, Anthropic Claude, Google Gemini, or Codex CLI TOML
+    /// Export all 12 CHRONOS tool schemas for OpenAI, Anthropic Claude, Google Gemini, or Codex CLI TOML
     Schema {
         /// Output format: openai | responses | anthropic | gemini | codex-toml | mcp
         #[arg(short, long, default_value = "openai")]
         format: String,
+    },
+    /// 1-Call Subagent Context Engine: BM25 search + verbatim source snippets + verification surfaces + 4-angle audit
+    Explore {
+        /// Natural-language question, symbol name, or regex pattern to explore
+        query: String,
+        /// Optional file path filter
+        #[arg(short, long)]
+        file: Option<PathBuf>,
+        /// Maximum number of symbol bundles to return (default: 3, max: 10)
+        #[arg(short, long, default_value_t = 3)]
+        max_symbols: usize,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Zero-latency (<20ms), fail-open lifecycle hook handler for Antigravity (.agents/hooks.json) and Claude Code (.claude/settings.json)
+    Hook {
+        /// Hook event name: session-start | post-edit
+        event: String,
+        /// Target client hook schema: antigravity | claude | codex
+        #[arg(short, long, default_value = "antigravity")]
+        client: String,
     },
 }
 
@@ -500,11 +525,18 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        Commands::Init { client, files, name, binary } => {
-            use chronos_core::graph::agents_md::{scaffold_client_files, AgentTarget};
+        Commands::Init { client, files, name, binary, with_hooks } => {
+            use chronos_core::graph::agents_md::{scaffold_client_files_with_options, AgentTarget};
             let agent_target = AgentTarget::from_str_loose(&client);
             let graph = build_cli_graph(&workspace, &files)?;
-            let bundle = scaffold_client_files(&graph, &workspace, agent_target, &binary, name.as_deref());
+            let bundle = scaffold_client_files_with_options(
+                &graph,
+                &workspace,
+                agent_target,
+                &binary,
+                name.as_deref(),
+                with_hooks,
+            );
             println!(
                 "🚀 Scaffolding CHRONOS 5D Integration for {} ({} graph nodes indexed)...",
                 agent_target.display_name(),
@@ -531,6 +563,81 @@ async fn main() -> Result<()> {
         Commands::Schema { format } => {
             let out = commands::mcp_info::export_schema(&format)?;
             println!("{out}");
+            Ok(())
+        }
+        Commands::Explore { query, file, max_symbols, json } => {
+            use chronos_core::graph::query::GraphQueryEngine;
+            let files = file.iter().cloned().collect::<Vec<_>>();
+            let graph = build_cli_graph(&workspace, &files)?;
+            let qe = GraphQueryEngine::new(&graph);
+            let file_filter = file.as_ref().map(|f| f.to_string_lossy().to_string());
+            let resp = qe.explore_graph(&query, file_filter.as_deref(), max_symbols);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&resp)?);
+            } else {
+                println!("🧭 CHRONOS 1-Call Explore: {}", resp.summary);
+                for (i, b) in resp.bundles.iter().enumerate() {
+                    println!(
+                        "\n── [{}/{}] {} ({}:{}-{}, score: {:.1}, PageRank: {:.4}) ──",
+                        i + 1,
+                        resp.bundles.len(),
+                        b.snippet.name,
+                        b.snippet.file,
+                        b.snippet.start_line,
+                        b.snippet.end_line,
+                        b.score,
+                        b.snippet.pagerank_score
+                    );
+                    println!("Callers: {:?} | Callees: {:?} | Tests: {:?}", b.snippet.callers, b.snippet.callees, b.snippet.covering_tests);
+                    println!("{}\n", b.snippet.source_code);
+                }
+                if !resp.verification_surfaces.is_empty() {
+                    println!("🎯 Verification Surfaces (End-to-End Entrypoints):");
+                    for s in &resp.verification_surfaces {
+                        println!("  • [{}] {} ({}:{}) — {}", s.surface_kind, s.name, s.file, s.line, s.suggested_verification);
+                    }
+                }
+                if !resp.four_angle_diagnostics.is_empty() {
+                    println!("\n🔍 4-Angle Code Review Diagnostics:");
+                    for d in &resp.four_angle_diagnostics {
+                        println!("  • [{}] {} ({}:{}) — {} -> {}", d.angle, d.symbol, d.file, d.line, d.summary, d.recommendation);
+                    }
+                }
+            }
+            Ok(())
+        }
+        Commands::Hook { event, client } => {
+            // Zero-latency (<20ms), fail-open lifecycle hook handler
+            let ev = event.trim().to_ascii_lowercase();
+            let cl = client.trim().to_ascii_lowercase();
+            let msg = format!(
+                "CHRONOS-AGENT v{} 5D Code Intelligence active (12 MCP tools). Use chronos_explore for 1-call context and chronos_blast_radius before editing shared hubs.",
+                env!("CARGO_PKG_VERSION")
+            );
+            if ev == "session-start" || ev == "sessionstart" {
+                if cl.contains("claude") {
+                    let payload = serde_json::json!({
+                        "hookSpecificOutput": {
+                            "hookEventName": "SessionStart",
+                            "additionalContext": msg
+                        }
+                    });
+                    println!("{}", payload);
+                } else {
+                    // Antigravity SessionStart injectSteps format
+                    let payload = serde_json::json!({
+                        "injectSteps": [
+                            {
+                                "ephemeralMessage": msg
+                            }
+                        ]
+                    });
+                    println!("{}", payload);
+                }
+            } else {
+                // PostToolUse / post-edit fail-open empty JSON object
+                println!("{{}}");
+            }
             Ok(())
         }
     }

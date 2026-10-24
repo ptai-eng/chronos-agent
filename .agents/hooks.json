@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "chronos hook post-edit --workspace . --client antigravity",
+            "type": "command"
+          }
+        ],
+        "matcher": "edit_file|write_file"
+      }
+    ],
+    "SessionStart": [
+      {
+        "command": "chronos hook session-start --workspace . --client antigravity",
+        "type": "command"
+      }
+    ]
+  }
+}

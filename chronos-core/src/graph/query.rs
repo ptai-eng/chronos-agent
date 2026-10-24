@@ -191,6 +191,58 @@ pub struct ArchitectureReport {
     pub algorithmic_hotspots: Vec<NodeSummary>,
 }
 
+/// Real user-facing surface entrypoint traced backwards via reverse BFS on `CALLS` edges.
+/// Inspired by Anthropic Claude Code `verify/SKILL.md`:
+/// *"Whatever calls `foo` ends at a CLI, a socket, or a window. Go there."*
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationSurface {
+    /// `"ApiRoute"` | `"CliCommand"` | `"RootEntrypoint"` | `"TestCase"`
+    pub surface_kind: String,
+    pub name: String,
+    pub file: String,
+    pub line: usize,
+    pub hop_distance: usize,
+    /// Ordered call path from surface entrypoint down to the target symbol
+    pub call_chain: Vec<String>,
+    /// Concrete verification guidance for agents and developers
+    pub suggested_verification: String,
+}
+
+/// 4-Angle Code Review Audit diagnostic (`Reuse`, `Efficiency`, `Simplification`, `Altitude`).
+/// Inspired by Anthropic Claude Code `code-review/SKILL.md`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FourAngleDiagnostic {
+    /// `"Reuse"` | `"Efficiency"` | `"Simplification"` | `"Altitude"`
+    pub angle: String,
+    pub symbol: String,
+    pub file: String,
+    pub line: usize,
+    pub summary: String,
+    pub recommendation: String,
+}
+
+/// Complete context bundle for a single symbol returned by `chronos_explore`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExploreSymbolBundle {
+    pub score: f32,
+    pub snippet: CodeSnippetResult,
+    pub verification_surfaces: Vec<VerificationSurface>,
+    pub four_angle_diagnostics: Vec<FourAngleDiagnostic>,
+}
+
+/// 1-Call Subagent Context (`chronos_explore`) combining BM25 search, verbatim source code,
+/// caller/callee topology, verification surfaces, and 4-angle review diagnostics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExploreResponse {
+    pub query: String,
+    pub symbols_returned: usize,
+    pub total_matches: usize,
+    pub summary: String,
+    pub bundles: Vec<ExploreSymbolBundle>,
+    pub verification_surfaces: Vec<VerificationSurface>,
+    pub four_angle_diagnostics: Vec<FourAngleDiagnostic>,
+}
+
 /// High-level query operations on the ChronosGraph.
 pub struct GraphQueryEngine<'g> {
     graph: &'g ChronosGraph,
@@ -697,6 +749,501 @@ impl<'g> GraphQueryEngine<'g> {
             entry_points,
             top_pagerank_hubs: hubs,
             algorithmic_hotspots,
+        }
+    }
+
+    /// Trace backwards along `CALLS` edges (and `TESTS` edges) to discover real user-facing
+    /// verification surfaces (`ApiRoute`, `CliCommand`, `RootEntrypoint`, `TestCase`) that
+    /// exercise `target_id`.
+    pub fn trace_verification_surfaces(
+        &self,
+        target_id: &NodeId,
+        max_depth: usize,
+    ) -> Vec<VerificationSurface> {
+        let Some(target_node) = self.graph.get_node(target_id) else {
+            return Vec::new();
+        };
+
+        let mut surfaces: Vec<VerificationSurface> = Vec::new();
+        let mut seen_surfaces = std::collections::HashSet::new();
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+
+        visited.insert(target_id.clone());
+        queue.push_back((target_id.clone(), vec![target_node.name.clone()], 0usize));
+
+        while let Some((curr_id, chain_rev, depth)) = queue.pop_front() {
+            let Some(curr_node) = self.graph.get_node(&curr_id) else {
+                continue;
+            };
+            let callers = self.graph.callers_of(&curr_id);
+
+            let file_norm = curr_node.location.file.to_string_lossy().replace('\\', "/");
+            let is_api_route = curr_node.kind == NodeKind::ApiRoute;
+            let is_cli_cmd = curr_node.name == "main"
+                || curr_node.name.starts_with("cmd_")
+                || curr_node.name.starts_with("run_")
+                || (callers.is_empty()
+                    && (file_norm.contains("cli")
+                        || file_norm.contains("commands/")
+                        || file_norm.ends_with("main.rs")
+                        || file_norm.ends_with("main.py")
+                        || file_norm.ends_with("main.go")));
+            let is_test_case = curr_node.kind == NodeKind::TestCase
+                || curr_node.name.starts_with("test_")
+                || file_norm.contains("test");
+            let is_root_fn = callers.is_empty()
+                && curr_node.kind == NodeKind::Function
+                && (curr_node.heuristics.fan_out > 0 || depth > 0);
+
+            if is_api_route || is_cli_cmd || is_test_case || is_root_fn {
+                if seen_surfaces.insert(curr_id.clone()) {
+                    let mut call_chain = chain_rev.clone();
+                    call_chain.reverse();
+                    let surface_kind = if is_api_route {
+                        "ApiRoute"
+                    } else if is_cli_cmd {
+                        "CliCommand"
+                    } else if is_test_case {
+                        "TestCase"
+                    } else {
+                        "RootEntrypoint"
+                    };
+
+                    let suggested_verification = match surface_kind {
+                        "ApiRoute" => format!(
+                            "Send live HTTP/RPC request to '{}' ({}:{}) — reaches '{}' in {} hop(s): {}",
+                            curr_node.name,
+                            file_norm,
+                            curr_node.location.start_line,
+                            target_node.name,
+                            depth,
+                            call_chain.join(" -> ")
+                        ),
+                        "CliCommand" => format!(
+                            "Invoke CLI/Binary entrypoint '{}' ({}:{}) — reaches '{}' in {} hop(s): {}",
+                            curr_node.name,
+                            file_norm,
+                            curr_node.location.start_line,
+                            target_node.name,
+                            depth,
+                            call_chain.join(" -> ")
+                        ),
+                        "TestCase" => format!(
+                            "Execute covering test '{}' ({}:{}) — exercises '{}' in {} hop(s)",
+                            curr_node.name,
+                            file_norm,
+                            curr_node.location.start_line,
+                            target_node.name,
+                            depth
+                        ),
+                        _ => format!(
+                            "Trigger root entrypoint '{}' ({}:{}) — reaches '{}' in {} hop(s): {}",
+                            curr_node.name,
+                            file_norm,
+                            curr_node.location.start_line,
+                            target_node.name,
+                            depth,
+                            call_chain.join(" -> ")
+                        ),
+                    };
+
+                    surfaces.push(VerificationSurface {
+                        surface_kind: surface_kind.to_string(),
+                        name: curr_node.name.clone(),
+                        file: file_norm,
+                        line: curr_node.location.start_line,
+                        hop_distance: depth,
+                        call_chain,
+                        suggested_verification,
+                    });
+                }
+            }
+
+            if depth >= max_depth {
+                continue;
+            }
+
+            for caller in callers {
+                if visited.insert(caller.id.clone()) {
+                    let mut next_chain = chain_rev.clone();
+                    next_chain.push(caller.name.clone());
+                    queue.push_back((caller.id.clone(), next_chain, depth + 1));
+                }
+            }
+        }
+
+        // Also include explicit TESTS edges for target_id if not already added
+        for test_node in self.graph.find_covering_tests(target_id) {
+            if seen_surfaces.insert(test_node.id.clone()) {
+                let file_norm = test_node.location.file.to_string_lossy().replace('\\', "/");
+                surfaces.push(VerificationSurface {
+                    surface_kind: "TestCase".to_string(),
+                    name: test_node.name.clone(),
+                    file: file_norm.clone(),
+                    line: test_node.location.start_line,
+                    hop_distance: 1,
+                    call_chain: vec![test_node.name.clone(), target_node.name.clone()],
+                    suggested_verification: format!(
+                        "Execute covering test '{}' ({}:{}) — directly covers '{}'",
+                        test_node.name,
+                        file_norm,
+                        test_node.location.start_line,
+                        target_node.name
+                    ),
+                });
+            }
+        }
+
+        let priority = |kind: &str| -> u8 {
+            match kind {
+                "ApiRoute" => 0,
+                "CliCommand" => 1,
+                "RootEntrypoint" => 2,
+                _ => 3,
+            }
+        };
+        surfaces.sort_by(|a, b| {
+            priority(&a.surface_kind)
+                .cmp(&priority(&b.surface_kind))
+                .then_with(|| a.hop_distance.cmp(&b.hop_distance))
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        surfaces.truncate(8);
+        surfaces
+    }
+
+    /// Detect potential reuse / duplicate logic candidates across the workspace graph using
+    /// identifier token Jaccard similarity and structural complexity proximity.
+    pub fn find_reuse_candidates(&self, target_node: &ChronosNode) -> Vec<FourAngleDiagnostic> {
+        if !matches!(target_node.kind, NodeKind::Function | NodeKind::ApiRoute) {
+            return Vec::new();
+        }
+        let trivial_names = [
+            "new", "default", "run", "main", "get", "set", "from", "into", "fmt", "clone", "init",
+            "build", "parse",
+        ];
+        let lower_name = target_node.name.to_lowercase();
+        if trivial_names.contains(&lower_name.as_str()) || lower_name.starts_with("test_") {
+            return Vec::new();
+        }
+        let span_lines = target_node
+            .location
+            .end_line
+            .saturating_sub(target_node.location.start_line)
+            + 1;
+        let sloc = target_node.heuristics.sloc.max(span_lines as u32);
+        if sloc < 5 {
+            return Vec::new();
+        }
+
+        let stopwords = [
+            "get", "set", "new", "run", "test", "with", "for", "from", "into", "the", "and", "by",
+            "to", "in", "on", "of",
+        ];
+        let target_tokens: std::collections::HashSet<String> =
+            tokenize_identifier(&target_node.name)
+                .into_iter()
+                .filter(|t| t.len() >= 3 && !stopwords.contains(&t.as_str()))
+                .collect();
+
+        if target_tokens.len() < 2 {
+            return Vec::new();
+        }
+
+        let target_file = target_node
+            .location
+            .file
+            .to_string_lossy()
+            .replace('\\', "/");
+        let mut diagnostics = Vec::new();
+
+        for peer in self.graph.all_nodes() {
+            if peer.id == target_node.id
+                || !matches!(peer.kind, NodeKind::Function | NodeKind::ApiRoute)
+            {
+                continue;
+            }
+            if peer.name.to_lowercase().starts_with("test_") {
+                continue;
+            }
+            let peer_span = peer
+                .location
+                .end_line
+                .saturating_sub(peer.location.start_line)
+                + 1;
+            let peer_sloc = peer.heuristics.sloc.max(peer_span as u32);
+            if peer_sloc < 5 {
+                continue;
+            }
+
+            let peer_tokens: std::collections::HashSet<String> = tokenize_identifier(&peer.name)
+                .into_iter()
+                .filter(|t| t.len() >= 3 && !stopwords.contains(&t.as_str()))
+                .collect();
+            if peer_tokens.len() < 2 {
+                continue;
+            }
+
+            let intersection = target_tokens.intersection(&peer_tokens).count();
+            if intersection < 2 {
+                continue;
+            }
+            let union = target_tokens.union(&peer_tokens).count().max(1);
+            let jaccard = intersection as f32 / union as f32;
+            let min_len = target_tokens.len().min(peer_tokens.len()).max(1);
+            let overlap = intersection as f32 / min_len as f32;
+
+            if jaccard >= 0.60 || overlap >= 0.75 {
+                let peer_file = peer.location.file.to_string_lossy().replace('\\', "/");
+                diagnostics.push(FourAngleDiagnostic {
+                    angle: "Reuse".to_string(),
+                    symbol: target_node.name.clone(),
+                    file: target_file.clone(),
+                    line: target_node.location.start_line,
+                    summary: format!(
+                        "Peer symbol '{}' ({}:{}) shares {:.0}% semantic identifier overlap",
+                        peer.name,
+                        peer_file,
+                        peer.location.start_line,
+                        jaccard.max(overlap) * 100.0
+                    ),
+                    recommendation: format!(
+                        "Inspect '{}' at {}:{} before adding parallel logic; reuse or extract a shared helper.",
+                        peer.name, peer_file, peer.location.start_line
+                    ),
+                });
+            }
+        }
+
+        diagnostics.truncate(3);
+        diagnostics
+    }
+
+    /// Perform the 4-Angle Code Review Audit (`Reuse`, `Efficiency`, `Simplification`, `Altitude`)
+    /// on a specific graph node (`target_id`).
+    pub fn audit_four_angles(&self, target_id: &NodeId) -> Vec<FourAngleDiagnostic> {
+        let Some(node) = self.graph.get_node(target_id) else {
+            return Vec::new();
+        };
+        let file_norm = node.location.file.to_string_lossy().replace('\\', "/");
+        let mut out = Vec::new();
+
+        // 1. Angle: Reuse
+        out.extend(self.find_reuse_candidates(node));
+
+        // 2. Angle: Efficiency
+        if node.heuristics.linear_scan_in_loop > 0
+            || node.heuristics.alloc_in_loop > 0
+            || node.heuristics.transitive_loop_depth >= 3
+        {
+            out.push(FourAngleDiagnostic {
+                angle: "Efficiency".to_string(),
+                symbol: node.name.clone(),
+                file: file_norm.clone(),
+                line: node.location.start_line,
+                summary: format!(
+                    "Transitive loop depth={}, linear_scan_in_loop={}, alloc_in_loop={}",
+                    node.heuristics.transitive_loop_depth,
+                    node.heuristics.linear_scan_in_loop,
+                    node.heuristics.alloc_in_loop
+                ),
+                recommendation: "Pre-index repeated lookups into a HashSet/HashMap before the loop and hoist heap allocations outside hot iterations.".to_string(),
+            });
+        } else if let Some(t) = &node.telemetry {
+            if t.is_bottleneck || t.is_hot_path {
+                out.push(FourAngleDiagnostic {
+                    angle: "Efficiency".to_string(),
+                    symbol: node.name.clone(),
+                    file: file_norm.clone(),
+                    line: node.location.start_line,
+                    summary: format!(
+                        "Runtime hot-path/bottleneck (p99={:.1}ms, cpu={:.1}%)",
+                        t.exec_time_ms_p99, t.cpu_percent_self
+                    ),
+                    recommendation: "Avoid extra allocations or synchronous I/O along this runtime hot path.".to_string(),
+                });
+            }
+        }
+
+        // 3. Angle: Simplification
+        if node.heuristics.cyclomatic_complexity >= 5
+            || node.heuristics.cognitive_load_score >= 25.0
+            || node.heuristics.loop_depth >= 2
+        {
+            out.push(FourAngleDiagnostic {
+                angle: "Simplification".to_string(),
+                symbol: node.name.clone(),
+                file: file_norm.clone(),
+                line: node.location.start_line,
+                summary: format!(
+                    "High control-flow complexity (cyclomatic={}, loop_depth={}, cognitive_load={:.0})",
+                    node.heuristics.cyclomatic_complexity,
+                    node.heuristics.loop_depth,
+                    node.heuristics.cognitive_load_score
+                ),
+                recommendation: "Flatten deeply nested conditionals using early-return guard clauses or decompose into focused pure helpers.".to_string(),
+            });
+        }
+
+        // 4. Angle: Altitude (Fix-Level & Architectural Boundary)
+        if node.heuristics.fan_in >= 4 {
+            out.push(FourAngleDiagnostic {
+                angle: "Altitude".to_string(),
+                symbol: node.name.clone(),
+                file: file_norm.clone(),
+                line: node.location.start_line,
+                summary: format!(
+                    "High-centrality shared hub (fan_in={}, fan_out={})",
+                    node.heuristics.fan_in, node.heuristics.fan_out
+                ),
+                recommendation: format!(
+                    "Fixing invariants here affects {} direct callers; keep the contract general and avoid embedding caller-specific policy in this hub.",
+                    node.heuristics.fan_in
+                ),
+            });
+        } else if node.heuristics.fan_in == 1 && node.heuristics.fan_out >= 4 {
+            out.push(FourAngleDiagnostic {
+                angle: "Altitude".to_string(),
+                symbol: node.name.clone(),
+                file: file_norm,
+                line: node.location.start_line,
+                summary: format!(
+                    "Orchestrator leaf with single caller (fan_in=1, fan_out={})",
+                    node.heuristics.fan_out
+                ),
+                recommendation: "Verify whether domain validation belongs in one of the downstream shared callees rather than only in this single-caller orchestrator.".to_string(),
+            });
+        }
+
+        out
+    }
+
+    /// Run the 4-Angle Code Review Audit across all functions/routes in a file.
+    pub fn audit_file_four_angles(&self, file_filter: &str) -> Vec<FourAngleDiagnostic> {
+        let norm_filter = file_filter.replace('\\', "/");
+        let mut results = Vec::new();
+        for node in self.graph.all_nodes() {
+            if !matches!(node.kind, NodeKind::Function | NodeKind::ApiRoute) {
+                continue;
+            }
+            let node_file = node.location.file.to_string_lossy().replace('\\', "/");
+            if node_file.contains(&norm_filter) || norm_filter.contains(&node_file) {
+                results.extend(self.audit_four_angles(&node.id));
+            }
+        }
+        results.truncate(20);
+        results
+    }
+
+    /// 1-Call Subagent Context (`chronos_explore`):
+    /// Answers code exploration questions in a single call by returning the top matching symbols,
+    /// their verbatim source snippets, caller/callee chains, covering tests, user-facing
+    /// verification surfaces, and 4-angle code review diagnostics.
+    pub fn explore_graph(
+        &self,
+        query: &str,
+        file_filter: Option<&str>,
+        max_symbols: usize,
+    ) -> ExploreResponse {
+        let cap = if max_symbols == 0 {
+            3
+        } else {
+            max_symbols.min(10)
+        };
+
+        let mut search_res = self.search_graph(&GraphSearchRequest {
+            query: if query.trim().is_empty() {
+                None
+            } else {
+                Some(query.to_string())
+            },
+            file_pattern: file_filter.map(|s| s.to_string()),
+            limit: cap * 2,
+            ..Default::default()
+        });
+
+        // Fallback if query is a regex/pattern that didn't hit BM25 token match
+        if search_res.results.is_empty() && !query.trim().is_empty() {
+            search_res = self.search_graph(&GraphSearchRequest {
+                name_pattern: Some(query.to_string()),
+                file_pattern: file_filter.map(|s| s.to_string()),
+                limit: cap * 2,
+                ..Default::default()
+            });
+        }
+
+        let mut bundles = Vec::new();
+        let mut all_surfaces = Vec::new();
+        let mut seen_surfaces = std::collections::HashSet::new();
+        let mut all_diagnostics = Vec::new();
+
+        for hit in search_res
+            .results
+            .iter()
+            .filter(|m| m.node.kind != "File")
+            .take(cap)
+        {
+            if let Some(snippet) = self.get_code_snippet(&hit.node.name, Some(&hit.node.file)) {
+                let node_id = self.graph.all_nodes().into_iter().find_map(|n| {
+                    let f = n.location.file.to_string_lossy().replace('\\', "/");
+                    if n.name == hit.node.name && f == hit.node.file {
+                        Some(n.id.clone())
+                    } else {
+                        None
+                    }
+                });
+
+                let (surfaces, diags) = if let Some(ref id) = node_id {
+                    (
+                        self.trace_verification_surfaces(id, 5),
+                        self.audit_four_angles(id),
+                    )
+                } else {
+                    (Vec::new(), Vec::new())
+                };
+
+                for s in &surfaces {
+                    let key = format!("{}:{}:{}", s.surface_kind, s.file, s.name);
+                    if seen_surfaces.insert(key) {
+                        all_surfaces.push(s.clone());
+                    }
+                }
+                all_diagnostics.extend(diags.clone());
+
+                bundles.push(ExploreSymbolBundle {
+                    score: hit.score,
+                    snippet,
+                    verification_surfaces: surfaces,
+                    four_angle_diagnostics: diags,
+                });
+            }
+        }
+
+        let summary = if bundles.is_empty() {
+            format!(
+                "No symbols matched query '{}'. Try broader keywords or call chronos_get_architecture.",
+                query
+            )
+        } else {
+            format!(
+                "Explored {} symbol(s) for '{}' (out of {} matches) with {} verification surface(s) and {} 4-angle review diagnostic(s).",
+                bundles.len(),
+                query,
+                search_res.total,
+                all_surfaces.len(),
+                all_diagnostics.len()
+            )
+        };
+
+        ExploreResponse {
+            query: query.to_string(),
+            symbols_returned: bundles.len(),
+            total_matches: search_res.total,
+            summary,
+            bundles,
+            verification_surfaces: all_surfaces,
+            four_angle_diagnostics: all_diagnostics,
         }
     }
 }

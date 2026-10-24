@@ -12,21 +12,20 @@ This skill connects **Google Antigravity (`agy`)**, **Claude Code**, **OpenAI Co
 
 ## Primary High-Centrality Hubs in `chronos-agent`
 
-- **Top PageRank Hubs:** `new` (`0.0210`), `new` (`0.0190`), `new` (`0.0162`), `NodeId` (`0.0135`), `default` (`0.0117`)
+- **Top PageRank Hubs:** `new` (`0.0211`), `new` (`0.0190`), `new` (`0.0162`), `NodeId` (`0.0134`), `default` (`0.0117`)
 
-## Mandatory 4-Step Verification Workflow
+## Mandatory 4-Step Verification Workflow (12 MCP Tools)
 
-1. **Graph Discovery First (Zero Context Bloat):**
-   - Call `chronos_get_architecture` to inspect Label-Propagation community clusters, cohesion scores, and $O(N^2)$ loop hotspots.
-   - Call `chronos_search_graph` (BM25 + regex + `min_loop_depth`) or `chronos_get_snippet` to read exact function spans (`start_line..=end_line`) with callers, callees, and covering tests.
-   - Call `chronos_query_graph` for custom read-only OpenCypher queries over `ChronosNode` (`CALLS`, `CONTAINS`, `TESTS`, `IMPORTS`, `CO_CHANGES_WITH`).
+1. **1-Call Subagent Discovery (`chronos_explore` — Zero Context Bloat):**
+   - Call `chronos_explore` (`query`, `file_filter`, `max_symbols`) to get top BM25 symbols, verbatim source code (`start_line..=end_line`), caller/callee topology, user-facing `verification_surfaces`, and `four_angle_diagnostics` (`Reuse`, `Efficiency`, `Simplification`, `Altitude`) in a single `<15ms` call.
+   - Or call `chronos_get_architecture`, `chronos_search_graph`, `chronos_get_snippet`, and `chronos_query_graph` (OpenCypher over `CALLS`, `CONTAINS`, `TESTS`, `IMPORTS`, `CO_CHANGES_WITH`).
 
-2. **Pre-Edit 5D Blast-Radius Gate:**
+2. **Pre-Edit 5D Blast-Radius & Structured Findings Gate:**
    - Before modifying any public function, struct, or HTTP route, call `chronos_blast_radius` (`symbol_name`, `contract_breaking: true/false`, `detail: "summary"`).
-   - Inspect the `confidence_interval`, `residual_unknowns`, and Git temporal co-change partners (`CO_CHANGES_WITH`).
+   - Inspect `verification_surfaces` (real API routes / CLI commands / root entrypoints to exercise), `structured_findings` (line-anchored `failure_scenario` + `CONFIRMED`/`PLAUSIBLE` verdicts), `confidence_interval`, and Git `CO_CHANGES_WITH` partners.
 
-3. **Semantic Contract Broker Check:**
-   - After modifying function signatures or API endpoints, call `chronos_contract_status` to ensure no downstream callers were broken.
+3. **Semantic Contract Broker & 4-Angle Review Check:**
+   - Call `chronos_analyze_file` (`file_path`, `detail: "complete"`) to inspect 4-Angle Code Review diagnostics (`Reuse` duplicate candidates, `Efficiency` loop scans, `Simplification` nesting depth, `Altitude` hub centrality) and `chronos_contract_status` to drain breaking signature alerts.
 
 4. **Super-Mutant Verification Gate:**
    - Before completing a task on core business logic, run `chronos_mutation_gate` (`file_path`) or `chronos diff --staged --json --ci` to verify that unit tests kill synthetic code mutants.

@@ -127,13 +127,13 @@ pub fn run(client: String) -> Result<()> {
     }
 
     println!("─────────────────────────────────────────────────────────────────");
-    println!("11 Registered MCP Tools:");
+    println!("12 Registered MCP Tools:");
     println!("  • chronos_analyze_file        • chronos_query_hotspots");
     println!("  • chronos_blast_radius        • chronos_mutation_gate");
     println!("  • chronos_contract_status     • chronos_query_graph");
     println!("  • chronos_search_graph        • chronos_get_snippet");
     println!("  • chronos_get_architecture    • chronos_hydrate_telemetry");
-    println!("  • chronos_generate_agents_md");
+    println!("  • chronos_generate_agents_md  • chronos_explore (1-Call Context)");
 
     Ok(())
 }
@@ -381,10 +381,26 @@ fn raw_tool_specs() -> Vec<(&'static str, &'static str, Value)> {
                     "project_name": { "type": ["string", "null"] },
                     "write_to_disk": { "type": "boolean" },
                     "scaffold_configs": { "type": "boolean" },
+                    "with_hooks": { "type": "boolean" },
                     "output_path": { "type": "string" },
                     "auto_index": { "type": "boolean" }
                 },
-                "required": ["target", "project_name", "write_to_disk", "scaffold_configs", "output_path", "auto_index"],
+                "required": ["target", "project_name", "write_to_disk", "scaffold_configs", "with_hooks", "output_path", "auto_index"],
+                "additionalProperties": false
+            }),
+        ),
+        (
+            "chronos_explore",
+            "1-Call Subagent Context Engine (<15ms). Returns top BM25/regex matching symbols, verbatim source code (start_line..=end_line), caller/callee chains, covering tests, user-facing verification_surfaces, and 4-angle review diagnostics.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string" },
+                    "file_filter": { "type": ["string", "null"] },
+                    "max_symbols": { "type": "integer" },
+                    "auto_index": { "type": "boolean" }
+                },
+                "required": ["query", "file_filter", "max_symbols", "auto_index"],
                 "additionalProperties": false
             }),
         ),
@@ -399,23 +415,24 @@ mod tests {
     fn test_export_schema_openai_responses_anthropic_gemini_and_codex_toml() {
         let openai = export_schema("openai").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&openai).unwrap();
-        assert_eq!(parsed.as_array().unwrap().len(), 11);
+        assert_eq!(parsed.as_array().unwrap().len(), 12);
         assert_eq!(parsed[0]["type"], "function");
         assert_eq!(parsed[0]["function"]["strict"], true);
 
         let responses = export_schema("responses").unwrap();
         let resp_val: serde_json::Value = serde_json::from_str(&responses).unwrap();
-        assert_eq!(resp_val.as_array().unwrap().len(), 11);
+        assert_eq!(resp_val.as_array().unwrap().len(), 12);
         assert_eq!(resp_val[10]["name"], "chronos_generate_agents_md");
+        assert_eq!(resp_val[11]["name"], "chronos_explore");
 
         let anthropic = export_schema("anthropic").unwrap();
         let anth_val: serde_json::Value = serde_json::from_str(&anthropic).unwrap();
-        assert_eq!(anth_val.as_array().unwrap().len(), 11);
+        assert_eq!(anth_val.as_array().unwrap().len(), 12);
         assert!(anth_val[0]["input_schema"].is_object());
 
         let gemini = export_schema("gemini").unwrap();
         let gem_val: serde_json::Value = serde_json::from_str(&gemini).unwrap();
-        assert_eq!(gem_val[0]["functionDeclarations"].as_array().unwrap().len(), 11);
+        assert_eq!(gem_val[0]["functionDeclarations"].as_array().unwrap().len(), 12);
 
         let toml = export_schema("codex-toml").unwrap();
         assert!(toml.contains("[mcp_servers.chronos-agent]"));

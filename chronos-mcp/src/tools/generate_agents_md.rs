@@ -8,7 +8,7 @@ use crate::protocol::CallToolResult;
 use crate::state::{ChronosState, SharedState};
 use chronos_core::{
     ast::dispatcher::LanguageDispatcher,
-    graph::agents_md::{scaffold_client_files, synthesize_target_context, AgentTarget},
+    graph::agents_md::{scaffold_client_files_with_options, synthesize_target_context, AgentTarget},
 };
 use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
@@ -39,6 +39,12 @@ pub async fn handle_generate_agents_md(
     let scaffold_configs = params
         .as_ref()
         .and_then(|p| p.get("scaffold_configs"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let with_hooks = params
+        .as_ref()
+        .and_then(|p| p.get("with_hooks"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
@@ -94,13 +100,14 @@ pub async fn handle_generate_agents_md(
     let mut written_files: Vec<String> = Vec::new();
 
     if write_to_disk {
-        if scaffold_configs || target == AgentTarget::All {
-            let bundle = scaffold_client_files(
+        if scaffold_configs || with_hooks || target == AgentTarget::All {
+            let bundle = scaffold_client_files_with_options(
                 &st.graph,
                 &st.workspace_root,
                 target,
                 "chronos-mcp",
                 project_name.as_deref(),
+                with_hooks,
             );
             for item in bundle {
                 let rel_path = Path::new(&item.relative_path);
