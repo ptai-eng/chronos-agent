@@ -1,8 +1,8 @@
 use chronos_core::graph::{
-    persistent::PersistentGraph,
+    persistent::GraphRepository,
     schema::{
-        ChronosGraph, ChronosNode, NodeId, NodeKind, SourceLocation,
-        StaticHeuristics, TelemetrySnapshot,
+        ChronosGraph, ChronosNode, NodeId, NodeKind, SourceLocation, StaticHeuristics,
+        TelemetrySnapshot,
     },
 };
 
@@ -18,6 +18,8 @@ fn make_function_node(file: &str, name: &str) -> ChronosNode {
             start_col: 0,
             end_line: 10,
             end_col: 1,
+            start_byte: 0,
+            end_byte: 120,
         },
         heuristics: StaticHeuristics {
             cognitive_load_score: 5.0,
@@ -45,7 +47,7 @@ fn make_function_node(file: &str, name: &str) -> ChronosNode {
             is_bottleneck: false,
             bottleneck_reason: None,
         }),
-        contract_signature: None,
+        contract_signature: Some("fn(x: number) -> number".to_string()),
         contract_mutated: false,
     }
 }
@@ -57,13 +59,7 @@ fn make_tricky_node() -> ChronosNode {
         name: "it's_a_func".to_string(),
         qualified_name: "module::it's_a_func".to_string(),
         kind: NodeKind::Function,
-        location: SourceLocation {
-            file: std::path::PathBuf::from("src/it's-utils.ts"),
-            start_line: 1,
-            start_col: 0,
-            end_line: 5,
-            end_col: 0,
-        },
+        location: SourceLocation::lines("src/it's-utils.ts", 1, 5),
         heuristics: StaticHeuristics::default(),
         telemetry: None,
         contract_signature: None,
@@ -76,97 +72,110 @@ fn make_tricky_node() -> ChronosNode {
 #[test]
 fn kuzu_open_creates_schema() {
     let dir = tempfile::tempdir().unwrap();
-    // Should not panic — tables must be created
-    PersistentGraph::open(dir.path()).unwrap();
+    GraphRepository::open(dir.path()).unwrap();
 }
 
 #[test]
 fn kuzu_open_idempotent_second_open() {
     let dir = tempfile::tempdir().unwrap();
-    // First open creates schema
-    PersistentGraph::open(dir.path()).unwrap();
-    // Second open must NOT error on "table already exists"
-    PersistentGraph::open(dir.path()).unwrap();
+    GraphRepository::open(dir.path()).unwrap();
+    GraphRepository::open(dir.path()).unwrap();
 }
 
-// ─── Upsert + round-trip ──────────────────────────────────────────────────────
+// ─── Upsert & load round-trip ─────────────────────────────────────────────────
 
 #[test]
 fn kuzu_upsert_and_load_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let store = PersistentGraph::open(dir.path()).unwrap();
+    let repo = GraphRepository::open(dir.path()).unwrap();
 
     let node = make_function_node("src/foo.ts", "fooFunc");
-    let conn = kuzu::Connection::new(&store.db).unwrap();
-    store.upsert_node(&conn, &node).unwrap();
+    repo.upsert_single_node(&node).unwrap();
 
     let mut graph = ChronosGraph::new();
-    let count = store.load_into_graph(&mut graph).unwrap();
+    let count = repo.load_into_graph(&mut graph).unwrap();
 
-    // Implementation now fully loads nodes — should be exactly 1
     assert_eq!(count, 1, "exactly one node should be loaded back");
-    assert!(
-        graph.nodes_by_kind(&NodeKind::Function).iter().any(|n| n.name == "fooFunc"),
-        "fooFunc should be present in the graph after load"
+    let loaded = graph
+        .nodes_by_kind(&NodeKind::Function)
+        .into_iter()
+        .find(|n| n.name == "fooFunc")
+        .expect("fooFunc should be present after load");
+    assert_eq!(loaded.qualified_name, "module::fooFunc");
+    assert_eq!(
+        loaded.contract_signature.as_deref(),
+        Some("fn(x: number) -> number")
     );
+    assert_eq!(loaded.location.start_byte, 0);
+    assert_eq!(loaded.location.end_byte, 120);
 }
 
 #[test]
 fn kuzu_upsert_multiple_nodes() {
     let dir = tempfile::tempdir().unwrap();
-    let store = PersistentGraph::open(dir.path()).unwrap();
+    let repo = GraphRepository::open(dir.path()).unwrap();
 
-    let conn = kuzu::Connection::new(&store.db).unwrap();
-    store.upsert_node(&conn, &make_function_node("src/a.ts", "funcA")).unwrap();
-    store.upsert_node(&conn, &make_function_node("src/b.ts", "funcB")).unwrap();
-    store.upsert_node(&conn, &make_function_node("src/c.ts", "funcC")).unwrap();
+    repo.upsert_single_node(&make_function_node("src/a.ts", "funcA")).unwrap();
+    repo.upsert_single_node(&make_function_node("src/b.ts", "funcB")).unwrap();
+    repo.upsert_single_node(&make_function_node("src/c.ts", "funcC")).unwrap();
 
     let mut graph = ChronosGraph::new();
-    let count = store.load_into_graph(&mut graph).unwrap();
+    let count = repo.load_into_graph(&mut graph).unwrap();
     assert_eq!(count, 3, "all three nodes must be persisted and loaded");
 }
 
-// ─── Persistence across restarts ──────────────────────────────────────────────
+// ─── Persistence across restarts & BUG-03 lossless updates ────────────────────
 
 #[test]
 fn kuzu_survives_restart() {
     let dir = tempfile::tempdir().unwrap();
 
-    // Session 1: write
     {
-        let store = PersistentGraph::open(dir.path()).unwrap();
-        let conn = kuzu::Connection::new(&store.db).unwrap();
-        store.upsert_node(&conn, &make_function_node("src/a.ts", "funcA")).unwrap();
-    } // DB dropped / closed here
+        let repo = GraphRepository::open(dir.path()).unwrap();
+        repo.upsert_single_node(&make_function_node("src/a.ts", "funcA")).unwrap();
+    }
 
-    // Session 2: read back — must not return 0
     {
-        let store = PersistentGraph::open(dir.path()).unwrap();
+        let repo = GraphRepository::open(dir.path()).unwrap();
         let mut graph = ChronosGraph::new();
-        let count = store.load_into_graph(&mut graph).unwrap();
+        let count = repo.load_into_graph(&mut graph).unwrap();
         assert_eq!(count, 1, "node must survive DB restart");
     }
 }
 
-// ─── Upsert idempotency ───────────────────────────────────────────────────────
-
 #[test]
-fn kuzu_upsert_same_id_twice_does_not_duplicate() {
+fn kuzu_upsert_updates_shifted_start_line_sloc_and_params_on_match() {
     let dir = tempfile::tempdir().unwrap();
-    let store = PersistentGraph::open(dir.path()).unwrap();
+    let repo = GraphRepository::open(dir.path()).unwrap();
 
     let node = make_function_node("src/foo.ts", "fooFunc");
-    let conn = kuzu::Connection::new(&store.db).unwrap();
-    store.upsert_node(&conn, &node).unwrap();
+    repo.upsert_single_node(&node).unwrap();
 
-    // Now update the SAME node
-    let mut updated = node.clone();
-    updated.heuristics.cognitive_load_score = 999.0;
-    store.upsert_node(&conn, &updated).unwrap();
+    let mut shifted = node.clone();
+    shifted.location.start_line = 42;
+    shifted.location.end_line = 75;
+    shifted.location.start_byte = 900;
+    shifted.location.end_byte = 1400;
+    shifted.heuristics.param_count = 4;
+    shifted.heuristics.sloc = 33;
+    shifted.heuristics.cognitive_load_score = 99.0;
+    shifted.contract_signature = Some("fn(a: i32, b: i32) -> bool".to_string());
+    repo.upsert_single_node(&shifted).unwrap();
 
     let mut graph = ChronosGraph::new();
-    let count = store.load_into_graph(&mut graph).unwrap();
+    let count = repo.load_into_graph(&mut graph).unwrap();
     assert_eq!(count, 1, "MERGE must not create duplicates");
+    let loaded = graph.get_node(&node.id).unwrap();
+    assert_eq!(loaded.location.start_line, 42, "BUG-03: ON MATCH SET must update start_line");
+    assert_eq!(loaded.location.end_line, 75);
+    assert_eq!(loaded.location.start_byte, 900);
+    assert_eq!(loaded.location.end_byte, 1400);
+    assert_eq!(loaded.heuristics.param_count, 4);
+    assert_eq!(loaded.heuristics.sloc, 33);
+    assert_eq!(
+        loaded.contract_signature.as_deref(),
+        Some("fn(a: i32, b: i32) -> bool")
+    );
 }
 
 // ─── Injection safety ─────────────────────────────────────────────────────────
@@ -174,39 +183,59 @@ fn kuzu_upsert_same_id_twice_does_not_duplicate() {
 #[test]
 fn kuzu_upsert_handles_single_quote_in_name() {
     let dir = tempfile::tempdir().unwrap();
-    let store = PersistentGraph::open(dir.path()).unwrap();
+    let repo = GraphRepository::open(dir.path()).unwrap();
 
-    // This must NOT panic or produce a Cypher syntax error
     let node = make_tricky_node();
-    let conn = kuzu::Connection::new(&store.db).unwrap();
-    store.upsert_node(&conn, &node).expect(
-        "upsert_node should not crash with single-quote in symbol name"
-    );
+    repo.upsert_single_node(&node)
+        .expect("upsert should not crash with single-quote in symbol name");
 
     let mut graph = ChronosGraph::new();
-    let count = store.load_into_graph(&mut graph).unwrap();
+    let count = repo.load_into_graph(&mut graph).unwrap();
     assert_eq!(count, 1, "tricky node must be persisted and loaded back");
 }
 
-// ─── sync_from_graph ──────────────────────────────────────────────────────────
+// ─── sync_from_graph & sync_file_delta ────────────────────────────────────────
 
 #[test]
 fn kuzu_sync_from_graph_bulk() {
-    
-
     let dir = tempfile::tempdir().unwrap();
-    let store = PersistentGraph::open(dir.path()).unwrap();
+    let repo = GraphRepository::open(dir.path()).unwrap();
 
     let mut in_graph = ChronosGraph::new();
     in_graph.add_node(make_function_node("src/x.ts", "funcX"));
     in_graph.add_node(make_function_node("src/y.ts", "funcY"));
 
-    let synced = store.sync_from_graph(&in_graph).unwrap();
+    let synced = repo.sync_from_graph(&in_graph).unwrap();
     assert_eq!(synced, 2, "sync_from_graph must sync all nodes");
 
     let mut out_graph = ChronosGraph::new();
-    let loaded = store.load_into_graph(&mut out_graph).unwrap();
+    let loaded = repo.load_into_graph(&mut out_graph).unwrap();
     assert_eq!(loaded, 2, "loaded count must match synced count");
+}
+
+#[test]
+fn kuzu_sync_file_delta_evicts_and_updates_single_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = GraphRepository::open(dir.path()).unwrap();
+
+    let mut graph = ChronosGraph::new();
+    graph.add_node(make_function_node("src/a.ts", "staleFn"));
+    graph.add_node(make_function_node("src/b.ts", "untouchedFn"));
+    repo.sync_from_graph(&graph).unwrap();
+
+    // Update only src/a.ts in memory: remove staleFn, add freshFn
+    graph.remove_nodes_for_file(std::path::Path::new("src/a.ts"));
+    graph.add_node(make_function_node("src/a.ts", "freshFn"));
+    let synced = repo
+        .sync_file_delta(&graph, std::path::Path::new("src/a.ts"), Some("deadbeef"))
+        .unwrap();
+    assert_eq!(synced, 1);
+
+    let mut reloaded = ChronosGraph::new();
+    repo.load_into_graph(&mut reloaded).unwrap();
+    assert!(!reloaded.all_nodes().iter().any(|n| n.name == "staleFn"));
+    assert!(reloaded.all_nodes().iter().any(|n| n.name == "freshFn"));
+    assert!(reloaded.all_nodes().iter().any(|n| n.name == "untouchedFn"));
 }
 
 #[test]
@@ -224,9 +253,8 @@ fn kuzu_persists_and_restores_edges_across_restart() {
     test_node.kind = NodeKind::TestCase;
     let test_id = test_node.id.clone();
 
-    // Session 1: populate nodes + CALLS and TESTS edges, then sync to KuzuDB
     {
-        let store = PersistentGraph::open(dir.path()).unwrap();
+        let repo = GraphRepository::open(dir.path()).unwrap();
         let mut graph = ChronosGraph::new();
         graph.add_node(caller_node);
         graph.add_node(callee_node);
@@ -234,15 +262,14 @@ fn kuzu_persists_and_restores_edges_across_restart() {
         graph.add_edge(&caller_id, &callee_id, ChronosEdge::new(EdgeKind::Calls)).unwrap();
         graph.add_edge(&test_id, &caller_id, ChronosEdge::new(EdgeKind::Tests)).unwrap();
 
-        let synced = store.sync_from_graph(&graph).unwrap();
+        let synced = repo.sync_from_graph(&graph).unwrap();
         assert_eq!(synced, 3, "3 nodes should be synced (along with 2 edges)");
     }
 
-    // Session 2: reopen KuzuDB and verify edges are restored
     {
-        let store = PersistentGraph::open(dir.path()).unwrap();
+        let repo = GraphRepository::open(dir.path()).unwrap();
         let mut restored = ChronosGraph::new();
-        let loaded_nodes = store.load_into_graph(&mut restored).unwrap();
+        let loaded_nodes = repo.load_into_graph(&mut restored).unwrap();
         assert_eq!(loaded_nodes, 3, "all 3 nodes must be restored");
 
         let status = restored.status_report();
@@ -261,14 +288,13 @@ fn kuzu_persists_and_restores_edges_across_restart() {
 #[test]
 fn kuzu_readonly_cypher_query_and_complexity_columns() {
     let dir = tempfile::tempdir().unwrap();
-    let store = PersistentGraph::open(dir.path()).unwrap();
+    let repo = GraphRepository::open(dir.path()).unwrap();
 
     let mut graph = ChronosGraph::new();
     graph.add_node(make_function_node("src/hot.ts", "deleteUserSession"));
-    store.sync_from_graph(&graph).unwrap();
+    repo.sync_from_graph(&graph).unwrap();
 
-    // Query complexity columns and verify string literal 'deleteUserSession' is allowed
-    let res = store
+    let res = repo
         .execute_readonly_cypher(
             "MATCH (f:ChronosNode) WHERE f.name = 'deleteUserSession' AND f.transitive_loop_depth >= 2 RETURN f.name, f.transitive_loop_depth, f.linear_scan_in_loop",
             100,
@@ -304,7 +330,7 @@ fn kuzu_incremental_xxhash64_merkle_sync_skips_unchanged_and_evicts_modified() {
     let dir = tempfile::tempdir().unwrap();
     let db_dir = dir.path().join(".chronos").join("graph.kuzu");
     std::fs::create_dir_all(db_dir.parent().unwrap()).unwrap();
-    let store = PersistentGraph::open(&db_dir).unwrap();
+    let repo = GraphRepository::open(&db_dir).unwrap();
 
     let file_a = dir.path().join("service_a.ts");
     let file_b = dir.path().join("service_b.ts");
@@ -315,24 +341,21 @@ fn kuzu_incremental_xxhash64_merkle_sync_skips_unchanged_and_evicts_modified() {
     let mut graph = ChronosGraph::new();
     let mut dispatcher = LanguageDispatcher::new().unwrap();
 
-    // Pass 1: Cold cache -> both files parsed
-    let stats1 = store
+    let stats1 = repo
         .sync_workspace_incremental(&mut graph, &files, &mut dispatcher)
         .unwrap();
     assert_eq!(stats1.re_parsed_files, 2);
     assert_eq!(stats1.unchanged_files, 0);
     assert!(graph.all_nodes().iter().any(|n| n.name == "oldHelper"));
 
-    // Pass 2: Unchanged files -> 0 reparsed, 2 skipped via xxHash64 Merkle table
-    let stats2 = store
+    let stats2 = repo
         .sync_workspace_incremental(&mut graph, &files, &mut dispatcher)
         .unwrap();
     assert_eq!(stats2.re_parsed_files, 0);
     assert_eq!(stats2.unchanged_files, 2);
 
-    // Pass 3: Modify file_a (rename oldHelper -> newHelper) -> 1 reparsed, 1 skipped, oldHelper evicted
     std::fs::write(&file_a, "export function newHelper(x: number) { return x + 2; }\n").unwrap();
-    let stats3 = store
+    let stats3 = repo
         .sync_workspace_incremental(&mut graph, &files, &mut dispatcher)
         .unwrap();
     assert_eq!(stats3.re_parsed_files, 1);
@@ -346,5 +369,3 @@ fn kuzu_incremental_xxhash64_merkle_sync_skips_unchanged_and_evicts_modified() {
         "New symbol newHelper must be present"
     );
 }
-
-

@@ -7,6 +7,7 @@ Cargo.lock.bak
 *.kuzu
 .kuzu/
 .chronos/
+.serena/
 kuzu_db/
 *.log
 

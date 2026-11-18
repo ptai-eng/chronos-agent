@@ -1,54 +1,60 @@
 //! # Shared Server State
 //!
-//! The global in-memory state shared across all MCP tool calls.
-//! Wrapped in Arc<RwLock<>> for safe concurrent access.
+//! Wraps `chronos_core::session::WorkspaceSession` in `Arc<RwLock<>>` for safe
+//! concurrent MCP tool & background file-watcher access.
 
-use chronos_core::{
-    contract::broker::ContractBroker,
-    graph::{schema::ChronosGraph, persistent::PersistentGraph},
+use chronos_core::session::WorkspaceSession;
+use std::{
+    ops::{Deref, DerefMut},
+    path::PathBuf,
+    sync::Arc,
 };
-use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 
-/// The shared CHRONOS runtime state
+/// The shared CHRONOS runtime state backed by `WorkspaceSession`.
 pub struct ChronosState {
-    /// The 4D Knowledge Graph (in-memory)
-    pub graph: ChronosGraph,
-    /// The Semantic Contract Broker
-    pub broker: ContractBroker,
-    /// The workspace root being analyzed
-    pub workspace_root: PathBuf,
-    /// The optional persistent graph database
-    pub db: Option<PersistentGraph>,
+    pub session: WorkspaceSession,
 }
 
 impl ChronosState {
     pub fn new(workspace_root: PathBuf) -> Self {
-        let db_path = workspace_root.join(".chronos").join("graph.kuzu");
-        std::fs::create_dir_all(db_path.parent().unwrap()).ok();
-        let db = PersistentGraph::open(&db_path)
-            .map_err(|e| tracing::warn!("KuzuDB unavailable: {} (using in-memory only)", e))
-            .ok();
-            
-        let mut state = Self {
-            graph: ChronosGraph::new(),
-            broker: ContractBroker::new(),
-            workspace_root,
-            db,
-        };
-        
-        if let Some(ref db) = state.db {
-            if let Ok(count) = db.load_into_graph(&mut state.graph) {
-                tracing::info!("Restored {} nodes from persisted graph", count);
-            }
-        }
-        state
+        Self::new_with_options(workspace_root, false)
+    }
+
+    pub fn new_with_options(workspace_root: PathBuf, readonly: bool) -> Self {
+        let session = WorkspaceSession::open(workspace_root.clone(), readonly)
+            .unwrap_or_else(|e| {
+                tracing::warn!("Session persistence unavailable ({}), using in-memory mode", e);
+                WorkspaceSession::open_in_memory(workspace_root, readonly)
+            });
+        Self { session }
+    }
+}
+
+impl Deref for ChronosState {
+    type Target = WorkspaceSession;
+
+    fn deref(&self) -> &Self::Target {
+        &self.session
+    }
+}
+
+impl DerefMut for ChronosState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.session
     }
 }
 
 /// Thread-safe handle to the shared state
 pub type SharedState = Arc<RwLock<ChronosState>>;
 
-pub fn new_shared_state(workspace_root: std::path::PathBuf) -> SharedState {
+pub fn new_shared_state(workspace_root: PathBuf) -> SharedState {
     Arc::new(RwLock::new(ChronosState::new(workspace_root)))
+}
+
+pub fn new_shared_state_with_options(workspace_root: PathBuf, readonly: bool) -> SharedState {
+    Arc::new(RwLock::new(ChronosState::new_with_options(
+        workspace_root,
+        readonly,
+    )))
 }

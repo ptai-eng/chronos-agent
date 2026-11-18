@@ -688,13 +688,7 @@ fn node_text(node: Node, source: &[u8]) -> String {
 }
 
 fn make_loc(node: Node, file_path: &Path) -> SourceLocation {
-    SourceLocation {
-        file: file_path.to_path_buf(),
-        start_line: node.start_position().row + 1,
-        start_col: node.start_position().column,
-        end_line: node.end_position().row + 1,
-        end_col: node.end_position().column,
-    }
+    SourceLocation::from_ts_node(node, file_path)
 }
 
 fn extract_signature_line(node: Node, source: &[u8]) -> String {
@@ -795,6 +789,7 @@ pub fn extract_routes_and_http_calls_from_source(
                             start_col: 0,
                             end_line: line_num,
                             end_col: line.len(),
+                            ..SourceLocation::default()
                         },
                     );
                     rnode.contract_signature = Some(format!("ROUTE::{route_path}"));

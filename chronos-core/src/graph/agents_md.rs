@@ -838,7 +838,6 @@ fn relativize_path(raw: &str, workspace: &Path) -> String {
 mod tests {
     use super::*;
     use crate::graph::schema::{ChronosEdge, ChronosNode, EdgeKind, NodeId, NodeKind, SourceLocation};
-    use std::path::PathBuf;
 
     fn sample_graph() -> ChronosGraph {
         let mut graph = ChronosGraph::new();
@@ -850,13 +849,7 @@ mod tests {
             NodeKind::Function,
             "verify_token",
             "src/auth.rs::verify_token",
-            SourceLocation {
-                file: PathBuf::from("src/auth.rs"),
-                start_line: 10,
-                start_col: 0,
-                end_line: 40,
-                end_col: 0,
-            },
+            SourceLocation::lines("src/auth.rs", 10, 40),
         );
         node_a.heuristics.loop_depth = 2;
         node_a.heuristics.transitive_loop_depth = 2;
@@ -867,13 +860,7 @@ mod tests {
             NodeKind::Function,
             "login_handler",
             "src/api.rs::login_handler",
-            SourceLocation {
-                file: PathBuf::from("src/api.rs"),
-                start_line: 5,
-                start_col: 0,
-                end_line: 25,
-                end_col: 0,
-            },
+            SourceLocation::lines("src/api.rs", 5, 25),
         );
 
         graph.add_node(node_a);

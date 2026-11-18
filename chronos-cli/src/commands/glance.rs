@@ -23,13 +23,7 @@ pub async fn run(workspace: PathBuf, file: PathBuf, symbol: Option<String>) -> R
     let analyzer = ImpactAnalyzer::new(&graph);
 
     if let Some(sym) = symbol {
-        // Find specific symbol
-        let candidate = graph
-            .nodes_by_kind(&NodeKind::Function)
-            .into_iter()
-            .chain(graph.nodes_by_kind(&NodeKind::Class).into_iter())
-            .find(|n| n.name == sym)
-            .map(|n| n.id.clone());
+        let candidate = graph.resolve_first_symbol(&sym, None).map(|n| n.id.clone());
 
         match candidate {
             Some(id) => {

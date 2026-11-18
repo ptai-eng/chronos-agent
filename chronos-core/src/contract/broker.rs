@@ -7,7 +7,9 @@
 //! returned as the FIRST thing in the next MCP tool call response.
 //! This ensures LLM context is never corrupted by abrupt interruption.
 
+use crate::ast::ts_parser::ParsedModule;
 use crate::contract::signature::ModuleSignature;
+use crate::graph::schema::ChronosGraph;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -35,17 +37,17 @@ struct BrokerState {
     pending_alerts: Vec<ContractEvent>,
 }
 
-/// The main Semantic Contract Broker.
-///
-/// Monitors workspace files, detects contract changes, and queues
-/// alerts for injection at the next agent tool call boundary.
+/// The deepened Semantic Contract Engine (7-language AST-backed).
 #[derive(Clone)]
-pub struct ContractBroker {
+pub struct ContractEngine {
     state: Arc<RwLock<BrokerState>>,
     event_sender: broadcast::Sender<ContractEvent>,
 }
 
-impl ContractBroker {
+/// Type alias preserved for seamless compatibility across crate boundaries.
+pub type ContractBroker = ContractEngine;
+
+impl ContractEngine {
     pub fn new() -> Self {
         let (sender, _) = broadcast::channel(100);
         Self {
@@ -73,7 +75,60 @@ impl ContractBroker {
         Ok(())
     }
 
-    /// Process a file change: compute signature diff and queue alert if needed.
+    /// Process an already-parsed module directly (used by `WorkspaceSession::index_file`),
+    /// cross-referencing `graph` to report downstream callers affected by signature changes.
+    pub async fn update_from_parsed(
+        &self,
+        parsed: &ParsedModule,
+        source: &str,
+        graph: Option<&ChronosGraph>,
+    ) -> Option<ContractEvent> {
+        let new_sig = ModuleSignature::from_parsed_module(parsed, source);
+        let file_path = parsed.file_path.clone();
+
+        let mut state = self.state.write().await;
+        if let Some(old_sig) = state.signatures.get(&file_path) {
+            if let Some(diff) = old_sig.diff(&new_sig) {
+                let mut msg = diff.agent_notification();
+                if let Some(g) = graph {
+                    let mut caller_notes = Vec::new();
+                    for ch in &diff.changed_exports {
+                        if let Some(node) = g.resolve_first_symbol(&ch.name, Some(&file_path.to_string_lossy())) {
+                            let callers: Vec<String> =
+                                g.callers_of(&node.id).into_iter().map(|c| c.name.clone()).collect();
+                            if !callers.is_empty() {
+                                caller_notes.push(format!("`{}` callers affected: {}", ch.name, callers.join(", ")));
+                            }
+                        }
+                    }
+                    if !caller_notes.is_empty() {
+                        msg.push_str(&format!("\nAffected graph callers: {}", caller_notes.join("; ")));
+                    }
+                }
+                let event = ContractEvent {
+                    file_path: file_path.to_string_lossy().to_string(),
+                    detected_at: Utc::now(),
+                    is_breaking: diff.is_breaking,
+                    notification_message: msg,
+                    diff_summary: format!(
+                        "{} changed, {} removed, {} added",
+                        diff.changed_exports.len(),
+                        diff.removed_exports.len(),
+                        diff.added_exports.len()
+                    ),
+                };
+                state.pending_alerts.push(event.clone());
+                let _ = self.event_sender.send(event.clone());
+                state.signatures.insert(file_path, new_sig);
+                return Some(event);
+            }
+        } else {
+            state.signatures.insert(file_path, new_sig);
+        }
+        None
+    }
+
+    /// Process a file change from disk: compute signature diff and queue alert if needed.
     pub async fn on_file_changed(&self, file_path: &Path) -> Option<ContractEvent> {
         let source = match tokio::fs::read_to_string(file_path).await {
             Ok(s) => s,
@@ -187,7 +242,7 @@ impl ContractBroker {
     }
 }
 
-impl Default for ContractBroker {
+impl Default for ContractEngine {
     fn default() -> Self {
         Self::new()
     }

@@ -31,7 +31,7 @@ pub async fn handle_query_graph(state: SharedState, params: Option<Value>) -> Ca
     }
 
     let st = state.read().await;
-    let Some(ref db) = st.db else {
+    let Some(ref db) = st.repo else {
         return CallToolResult::error("KuzuDB persistent engine is not initialized in current state");
     };
 

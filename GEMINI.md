@@ -21,26 +21,26 @@ This workspace ships native Antigravity customizations under `.agents/skills/chr
 
 ## 3. 5D Knowledge Graph Snapshot
 
-- **Indexed Symbols:** `567` nodes (`359` functions, `101` tests) | **Directed Edges:** `1262` (`1618` resolved calls, `3285` unresolved dynamic calls)
-- **Language Distribution:** Rust (539), TypeScript (25), C (3)
+- **Indexed Symbols:** `667` nodes (`429` functions, `117` tests) | **Directed Edges:** `1337` (`2526` resolved calls, `3435` unresolved dynamic calls)
+- **Language Distribution:** Rust (639), TypeScript (25), C (3)
 - **Runtime Telemetry Hydrated:** `Cold-Start Static + PageRank Mode` (`0` hot paths, `0` bottlenecks)
 
 ## 4. Architectural Modules (Label-Propagation Communities)
 
 | Module Cluster | Symbols | Internal Cohesion | Primary Symbols |
 | :--- | :---: | :---: | :--- |
-| `graph/schema` | 60 | 49% | `new`, `default`, `add_node`, `status_report` |
-| `graph/query` | 40 | 51% | `new`, `from_node`, `all_nodes`, `default` |
-| `graph/agents_md` | 31 | 41% | `new`, `synthesize_target_context`, `resolve_project_name`, `validate_readonly_cypher` |
-| `ast/ts_parser` | 30 | 86% | `new`, `node_text`, `parse_source`, `extract_symbols` |
-| `blast_radius/impact_matrix` | 24 | 45% | `new`, `analyze`, `build_coverage_and_unknowns`, `from_score` |
-| `ast/polyglot_parser` | 22 | 86% | `node_text`, `new`, `extract_routes_and_http_calls_from_source`, `populate_ast_complexity_metrics` |
-| `mutation/operators` | 21 | 65% | `new`, `generate_mutants`, `description`, `detect_return_statement` |
-| `tests/integration_test` | 21 | 33% | `new`, `nodes_by_kind`, `ingest_parsed_module`, `all_nodes` |
-| `tests/persistent_test` | 20 | 46% | `NodeId`, `open`, `new`, `load_into_graph` |
-| `contract/signature` | 19 | 85% | `from_source`, `extract_api_routes`, `extract_exported_functions`, `diff` |
-| `ast/diff` | 18 | 70% | `new`, `compute_module_diff`, `is_contract_breaking`, `add_change` |
-| `telemetry/cdp_client` | 18 | 65% | `default`, `rand_factor`, `is_available`, `backend_name` |
+| `graph/schema` | 60 | 58% | `lines`, `new`, `default`, `invalidate_caches` |
+| `graph/query` | 47 | 62% | `new`, `from_node`, `new_with_options`, `new` |
+| `ast/ts_parser` | 31 | 82% | `new`, `parse_source`, `node_text`, `extract_symbols` |
+| `graph/agents_md` | 28 | 57% | `new`, `synthesize_target_context`, `resolve_project_name`, `from_str_loose` |
+| `session` | 28 | 43% | `strip_windows_verbatim`, `normalize_workspace_root`, `is_supported`, `open_in_memory` |
+| `contract/signature` | 27 | 80% | `from_source`, `is_contract_breaking`, `diff`, `from_parsed_module` |
+| `registry` | 27 | 71% | `specs`, `to_mcp_schema`, `new_shared_state_with_options`, `list_tools` |
+| `tests/persistent_test` | 24 | 52% | `NodeId`, `open`, `load_into_graph`, `open_repository_if_allowed` |
+| `ast/polyglot_parser` | 23 | 75% | `node_text`, `from_ts_node`, `new`, `extract_routes_and_http_calls_from_source` |
+| `tests/integration_test` | 23 | 32% | `new`, `compute_line_text_edit`, `all_nodes`, `nodes_by_kind` |
+| `blast_radius/impact_matrix` | 21 | 69% | `new`, `from_graph`, `analyze`, `build_coverage_and_unknowns` |
+| `mutation/arena` | 21 | 76% | `new`, `with_strict`, `suggest_assertion_for_mutant`, `format_for_agent` |
 
 ## 5. High-Centrality Hub Symbols (Blast-Radius Sensitive)
 
@@ -48,39 +48,39 @@ Modifying these structural hubs affects the largest transitive caller trees. **A
 
 | Symbol | Kind | File | PageRank | Fan-In | Fan-Out | Transitive Loop Depth |
 | :--- | :---: | :--- | :---: | :---: | :---: | :---: |
-| `new` | `Function` | `chronos-core/src/graph/schema.rs:295` | `0.0211` | 16 | 2 | 0 |
-| `new` | `Function` | `chronos-core/src/contract/broker.rs:49` | `0.0190` | 24 | 0 | 0 |
-| `new` | `Function` | `chronos-core/src/telemetry/adapter.rs:116` | `0.0162` | 34 | 0 | 0 |
-| `NodeId` | `Class` | `chronos-core/src/graph/schema.rs:24` | `0.0134` | 6 | 0 | 0 |
-| `default` | `Function` | `chronos-core/src/graph/schema.rs:1104` | `0.0117` | 3 | 1 | 0 |
-| `ok` | `Function` | `chronos-mcp/src/protocol.rs:40` | `0.0107` | 16 | 0 | 0 |
-| `new` | `Function` | `chronos-core/src/mutation/operators.rs:86` | `0.0088` | 10 | 0 | 0 |
-| `new` | `Function` | `chronos-core/src/ast/ts_parser.rs:86` | `0.0075` | 14 | 0 | 0 |
-| `new` | `Function` | `chronos-core/src/graph/query.rs:252` | `0.0072` | 13 | 0 | 0 |
-| `node_text` | `Function` | `chronos-core/src/ast/ts_parser.rs:612` | `0.0067` | 8 | 0 | 0 |
+| `new` | `Function` | `chronos-core/src/mutation/operators.rs:90` | `0.0412` | 59 | 1 | 10 |
+| `compute_line_text_edit` | `Function` | `chronos-core/src/mutation/operators.rs:133` | `0.0358` | 1 | 2 | 10 |
+| `lines` | `Function` | `chronos-core/src/graph/schema.rs:112` | `0.0334` | 31 | 0 | 0 |
+| `new` | `Function` | `chronos-core/src/graph/schema.rs:347` | `0.0193` | 17 | 2 | 0 |
+| `new` | `Function` | `chronos-core/src/contract/signature.rs:124` | `0.0127` | 23 | 0 | 0 |
+| `NodeId` | `Class` | `chronos-core/src/graph/schema.rs:24` | `0.0113` | 5 | 0 | 0 |
+| `default` | `Function` | `chronos-core/src/graph/schema.rs:1252` | `0.0112` | 3 | 1 | 0 |
+| `find` | `Function` | `chronos-core/src/registry.rs:714` | `0.0109` | 24 | 0 | 0 |
+| `open` | `Function` | `chronos-core/src/session.rs:76` | `0.0077` | 16 | 4 | 10 |
+| `new` | `Function` | `chronos-core/src/graph/query.rs:1251` | `0.0069` | 14 | 0 | 0 |
 
 ## 6. Algorithmic Complexity & Loop Hotspots
 
 Functions with interprocedural nested loops (`transitive_loop_depth >= 2`), linear scans inside loops ($O(N^2)$ risk), or recursion:
 
-- **`extract_decorated`** (`chronos-core/src/ast/py_parser.rs:234`) — `transitive_loop_depth=10`, `linear_scan_in_loop=11`, `alloc_in_loop=4`, `recursive=true`
-- **`sync_workspace_incremental`** (`chronos-core/src/graph/persistent.rs:482`) — `transitive_loop_depth=10`, `linear_scan_in_loop=1`, `alloc_in_loop=1`, `recursive=false`
-- **`handle_generate_agents_md`** (`chronos-mcp/src/tools/generate_agents_md.rs:16`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=1`, `recursive=false`
-- **`handle_request`** (`chronos-mcp/src/server.rs:63`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
-- **`handle_analyze_file`** (`chronos-mcp/src/tools/analyze_file.rs:13`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
-- **`start`** (`chronos-mcp/src/watcher.rs:33`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=3`, `recursive=false`
+- **`extract_decorated`** (`chronos-core/src/ast/py_parser.rs:228`) — `transitive_loop_depth=10`, `linear_scan_in_loop=11`, `alloc_in_loop=4`, `recursive=true`
+- **`generate_mutants`** (`chronos-core/src/mutation/operators.rs:163`) — `transitive_loop_depth=10`, `linear_scan_in_loop=5`, `alloc_in_loop=5`, `recursive=false`
+- **`sync_workspace_incremental`** (`chronos-core/src/graph/persistent.rs:611`) — `transitive_loop_depth=10`, `linear_scan_in_loop=1`, `alloc_in_loop=1`, `recursive=false`
+- **`run_profiling_session`** (`chronos-core/src/telemetry/cdp_client.rs:222`) — `transitive_loop_depth=10`, `linear_scan_in_loop=1`, `alloc_in_loop=0`, `recursive=false`
+- **`main`** (`chronos-cli/src/main.rs:230`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
+- **`run`** (`chronos-core/src/mutation/arena.rs:170`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=3`, `recursive=false`
+- **`dispatch`** (`chronos-mcp/src/registry.rs:38`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
+- **`run`** (`chronos-cli/src/commands/graph.rs:10`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=1`, `recursive=false`
+- **`parse_unified_diff`** (`chronos-cli/src/commands/diff_audit.rs:106`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=12`, `recursive=false`
 - **`extract_symbols`** (`chronos-core/src/ast/ts_parser.rs:137`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=true`
-- **`handle_explore`** (`chronos-mcp/src/tools/explore.rs:19`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
-- **`visit_node`** (`chronos-core/src/ast/py_parser.rs:124`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=true`
-- **`v1_6_explore_verification_surfaces_structured_findings_and_4_angle_audit`** (`chronos-core/tests/integration_test.rs:469`) — `transitive_loop_depth=10`, `linear_scan_in_loop=0`, `alloc_in_loop=0`, `recursive=false`
 
 ## 7. Cross-Boundary API Routes (Frontend <-> Backend Stitched)
 
-- **`ROUTE /users/:id`** (`chronos-core/src/ast/ts_parser.rs:670`) — called by `is_test_module`
-- **`ROUTE /users`** (`chronos-core/src/ast/ts_parser.rs:675`) — no stitched callers
-- **`ROUTE /users/:id`** (`chronos-core/src/contract/signature.rs:338`) — no stitched callers
-- **`ROUTE /users`** (`chronos-core/src/contract/signature.rs:339`) — no stitched callers
+- **`ROUTE /users`** (`chronos-core/src/contract/signature.rs:479`) — no stitched callers
+- **`ROUTE /users/:id`** (`chronos-core/src/ast/ts_parser.rs:662`) — no stitched callers
+- **`ROUTE /users`** (`chronos-core/src/ast/ts_parser.rs:667`) — no stitched callers
 - **`GET mcpBinaryPath`** (`chronos-vscode/src/extension.ts:15`) — no stitched callers
+- **`ROUTE /users/:id`** (`chronos-core/src/contract/signature.rs:478`) — no stitched callers
 - **`GET /orders`** (`fixtures/ts-express-api/src/orderService.ts:183`) — no stitched callers
 - **`GET /orders/:id`** (`fixtures/ts-express-api/src/orderService.ts:192`) — no stitched callers
 - **`POST /orders/:id/discount`** (`fixtures/ts-express-api/src/orderService.ts:202`) — no stitched callers
@@ -95,13 +95,13 @@ Files that historically change together in Git commits. When modifying the left 
 - `Cargo.lock` $\rightarrow$ `Cargo.toml` (**100%** co-change confidence)
 - `Cargo.toml` $\rightarrow$ `Cargo.lock` (**100%** co-change confidence)
 - `assets/chronos_architecture.svg` $\rightarrow$ `README.md` (**100%** co-change confidence)
-- `assets/chronos_benchmark_radar.svg` $\rightarrow$ `README.md` (**100%** co-change confidence)
 - `assets/chronos_benchmark_radar.svg` $\rightarrow$ `assets/chronos_architecture.svg` (**100%** co-change confidence)
 - `assets/chronos_benchmark_radar.svg` $\rightarrow$ `assets/chronos_radar_dashboard.svg` (**100%** co-change confidence)
-- `assets/chronos_radar_dashboard.svg` $\rightarrow$ `assets/chronos_architecture.svg` (**100%** co-change confidence)
+- `assets/chronos_benchmark_radar.svg` $\rightarrow$ `README.md` (**100%** co-change confidence)
 - `assets/chronos_radar_dashboard.svg` $\rightarrow$ `README.md` (**100%** co-change confidence)
 - `assets/chronos_radar_dashboard.svg` $\rightarrow$ `assets/chronos_benchmark_radar.svg` (**100%** co-change confidence)
-- `chronos-core/Cargo.toml` $\rightarrow$ `Cargo.toml` (**100%** co-change confidence)
+- `assets/chronos_radar_dashboard.svg` $\rightarrow$ `assets/chronos_architecture.svg` (**100%** co-change confidence)
 - `chronos-core/Cargo.toml` $\rightarrow$ `Cargo.lock` (**100%** co-change confidence)
+- `chronos-core/Cargo.toml` $\rightarrow$ `Cargo.toml` (**100%** co-change confidence)
 - `chronos-core/src/ast/dispatcher.rs` $\rightarrow$ `chronos-core/src/ast/rs_parser.rs` (**100%** co-change confidence)
 

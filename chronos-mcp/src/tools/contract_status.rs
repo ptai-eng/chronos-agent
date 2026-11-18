@@ -10,7 +10,7 @@ pub async fn handle_contract_status(state: SharedState, _params: Option<Value>) 
     let st = state.read().await;
 
     // Drain all pending alerts (Pre-Tool Execution Gate)
-    let alerts_text = st.broker.format_pending_alerts_for_agent().await;
+    let alerts_text = st.contracts.format_pending_alerts_for_agent().await;
 
     match alerts_text {
         Some(alert_msg) => {

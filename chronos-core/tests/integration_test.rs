@@ -355,26 +355,14 @@ fn v1_4_git_temporal_co_change_coupling_surfaces_in_blast_radius() {
         NodeKind::File,
         "schema.sql",
         "src/schema.sql",
-        SourceLocation {
-            file: PathBuf::from("src/schema.sql"),
-            start_line: 1,
-            start_col: 0,
-            end_line: 20,
-            end_col: 0,
-        },
+        SourceLocation::lines("src/schema.sql", 1, 20),
     ));
     graph.add_node(ChronosNode::new(
         file_b_id.clone(),
         NodeKind::File,
         "user.rs",
         "src/models/user.rs",
-        SourceLocation {
-            file: PathBuf::from("src/models/user.rs"),
-            start_line: 1,
-            start_col: 0,
-            end_line: 50,
-            end_col: 0,
-        },
+        SourceLocation::lines("src/models/user.rs", 1, 50),
     ));
 
     let mut edge = ChronosEdge::new(EdgeKind::CoChangesWith);

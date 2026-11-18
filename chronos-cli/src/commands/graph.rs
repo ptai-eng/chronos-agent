@@ -80,12 +80,7 @@ pub async fn run(
                 std::process::exit(1);
             });
 
-            let target = graph
-                .nodes_by_kind(&chronos_core::graph::schema::NodeKind::Function)
-                .into_iter()
-                .chain(graph.nodes_by_kind(&chronos_core::graph::schema::NodeKind::Class).into_iter())
-                .find(|n| n.name == sym)
-                .map(|n| n.id.clone());
+            let target = graph.resolve_first_symbol(sym, None).map(|n| n.id.clone());
 
             match target {
                 Some(id) => {
@@ -105,11 +100,7 @@ pub async fn run(
                 std::process::exit(1);
             });
 
-            let target = graph
-                .nodes_by_kind(&chronos_core::graph::schema::NodeKind::Function)
-                .into_iter()
-                .find(|n| n.name == sym)
-                .map(|n| n.id.clone());
+            let target = graph.resolve_first_symbol(sym, None).map(|n| n.id.clone());
 
             match target {
                 Some(id) => {

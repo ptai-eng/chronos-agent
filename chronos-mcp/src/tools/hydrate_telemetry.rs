@@ -55,10 +55,12 @@ pub async fn handle_hydrate_telemetry(state: SharedState, params: Option<Value>)
     };
 
     let mut st = state.write().await;
-    let report = hydrate_graph(&mut st.graph, &session);
+    let report = hydrate_graph(&mut st.session.graph, &session);
 
-    if let Some(ref db) = st.db {
-        let _ = db.sync_from_graph(&st.graph);
+    if !st.session.readonly {
+        if let Some(ref db) = st.session.repo {
+            let _ = db.sync_from_graph(&st.session.graph);
+        }
     }
 
     let bottlenecks: Vec<Value> = session

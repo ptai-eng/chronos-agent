@@ -30,6 +30,8 @@ pub mod blast_radius;
 pub mod contract;
 pub mod graph;
 pub mod mutation;
+pub mod registry;
+pub mod session;
 pub mod telemetry;
 
 // Re-export primary types for convenience

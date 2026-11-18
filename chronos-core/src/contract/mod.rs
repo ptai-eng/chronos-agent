@@ -9,8 +9,11 @@
 //!   internal implementation changes.
 //! - **File Watcher:** notify-rs with 30ms debounce.
 
+//! # Semantic Contract Broker & Polyglot ContractEngine
+//!
+//! Pillar 3: Real-time 7-language AST contract tracking across agents & edits.
+
 pub mod broker;
 pub mod signature;
-pub mod watcher;
 
-pub use broker::{ContractBroker, ContractEvent};
+pub use broker::{ContractBroker, ContractEngine, ContractEvent};

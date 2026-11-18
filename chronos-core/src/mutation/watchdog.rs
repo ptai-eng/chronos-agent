@@ -29,6 +29,44 @@ pub struct MutantTestResult {
     pub output: String,
 }
 
+/// Ports & Adapters seam for executing a mutant under test (`ProcessTestExecutor` in prod,
+/// `MockTestExecutor` in fast unit tests).
+#[async_trait::async_trait]
+pub trait TestExecutor: Send + Sync {
+    async fn execute_mutant(
+        &self,
+        mutant_id: u64,
+        mutant_source: Option<&str>,
+        original_file: &Path,
+        test_files: &[&str],
+        config: &WatchdogConfig,
+        working_dir: &Path,
+    ) -> Result<MutantTestResult>;
+}
+
+/// Default production OS process executor backed by `tokio::process::Command` + RAII sandbox restore.
+pub struct ProcessTestExecutor;
+
+#[async_trait::async_trait]
+impl TestExecutor for ProcessTestExecutor {
+    async fn execute_mutant(
+        &self,
+        mutant_id: u64,
+        mutant_source: Option<&str>,
+        original_file: &Path,
+        test_files: &[&str],
+        config: &WatchdogConfig,
+        working_dir: &Path,
+    ) -> Result<MutantTestResult> {
+        match mutant_source {
+            Some(src) if mutant_id == 0 => {
+                run_mutant_test(src, original_file, test_files, config, working_dir).await
+            }
+            _ => run_super_mutant_id(mutant_id, test_files, config, working_dir).await,
+        }
+    }
+}
+
 /// Configuration for the mutation watchdog
 #[derive(Debug, Clone)]
 pub struct WatchdogConfig {

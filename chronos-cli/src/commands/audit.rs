@@ -95,7 +95,9 @@ pub async fn run(
         test_args: args,
     };
 
-    let arena = MutationArena::new(&graph).with_config(watchdog);
+    let arena = MutationArena::new(&graph)
+        .with_config(watchdog)
+        .with_strict(strict);
     let mutation_report = arena.run(&abs_file, None, &workspace).await?;
 
     println!("{}", mutation_report.format_for_agent());

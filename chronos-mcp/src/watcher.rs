@@ -79,47 +79,27 @@ impl FileWatcher {
                 // Flush pending files after debounce window
                 if !pending.is_empty() && last_event.elapsed() >= debounce {
                     let paths: Vec<PathBuf> = pending.drain().collect();
-                    debug!("Auto-syncing {} changed files to graph", paths.len());
+                    debug!("Auto-syncing {} changed files via WorkspaceSession", paths.len());
 
-                    let mut dispatcher = match LanguageDispatcher::new() {
-                        Ok(d) => d,
-                        Err(e) => { warn!("Dispatcher init failed: {}", e); continue; }
-                    };
-
-                    let workspace = workspace_root.clone();
                     for path in paths {
-                        // Security: only sync files within workspace
-                        if let Ok(canonical) = path.canonicalize() {
-                            if !canonical.starts_with(&workspace) {
-                                continue;
-                            }
-                        }
-
-                        match dispatcher.parse_file(&path) {
-                            Ok(parsed) => {
-                                let broker = {
-                                    let mut st = state.write().await;
-                                    let (nodes_added, edges_added) = st.graph.ingest_parsed_module(&parsed);
-                                    if let Some(ref db) = st.db {
-                                        if let Err(e) = db.sync_from_graph(&st.graph) {
-                                            warn!("Auto-sync KuzuDB failed: {}", e);
-                                        }
-                                    }
+                        let mut st = state.write().await;
+                        if path.exists() {
+                            match st.session.index_file(&path).await {
+                                Ok(report) => {
                                     info!(
                                         "Auto-synced {} ({} symbols, {} edges)",
                                         path.display(),
-                                        nodes_added,
-                                        edges_added
+                                        report.nodes_inserted,
+                                        report.edges_added
                                     );
-                                    st.broker.clone()
-                                };
-                                if let Err(e) = broker.index_file(&path).await {
-                                    warn!("Auto-sync contract broker failed for {:?}: {}", path, e);
+                                }
+                                Err(e) => {
+                                    warn!("Auto-sync skipped/failed for {:?}: {}", path, e);
                                 }
                             }
-                            Err(e) => {
-                                warn!("Auto-sync parse failed for {:?}: {}", path, e);
-                            }
+                        } else {
+                            st.session.evict_file(&path);
+                            info!("Evicted deleted file {} from graph", path.display());
                         }
                     }
                 }

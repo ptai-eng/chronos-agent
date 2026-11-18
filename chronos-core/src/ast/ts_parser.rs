@@ -615,17 +615,9 @@ fn node_text(node: tree_sitter::Node, source: &[u8]) -> String {
     String::from_utf8_lossy(&source[start..end]).to_string()
 }
 
-/// Convert a tree-sitter Node position to a CHRONOS SourceLocation.
+/// Convert a tree-sitter Node position (lines + byte span) to a CHRONOS SourceLocation.
 fn node_to_location(node: tree_sitter::Node, file_path: &Path) -> SourceLocation {
-    let start = node.start_position();
-    let end = node.end_position();
-    SourceLocation {
-        file: file_path.to_path_buf(),
-        start_line: start.row + 1,  // 1-indexed
-        start_col: start.column,
-        end_line: end.row + 1,
-        end_col: end.column,
-    }
+    SourceLocation::from_ts_node(node, file_path)
 }
 
 #[cfg(test)]

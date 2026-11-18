@@ -379,15 +379,13 @@ async fn main() -> Result<()> {
             commands::status::run(workspace, watch).await
         }
         Commands::Query { cypher, files, max_rows } => {
-            use chronos_core::graph::persistent::PersistentGraph;
-            let graph = build_cli_graph(&workspace, &files)?;
-            let db_path = workspace.join(".chronos").join("graph.kuzu");
-            if let Some(parent) = db_path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let db = PersistentGraph::open(&db_path)?;
-            db.sync_from_graph(&graph)?;
-            let res = db.execute_readonly_cypher(&cypher, max_rows)?;
+            use chronos_core::session::WorkspaceSession;
+            let mut session = WorkspaceSession::open(workspace, false)?;
+            session.ensure_indexed_files(&files, 300)?;
+            let repo = session
+                .repo()
+                .ok_or_else(|| anyhow::anyhow!("KuzuDB persistent engine is unavailable"))?;
+            let res = repo.execute_readonly_cypher(&cypher, max_rows)?;
             println!("{}", serde_json::to_string_pretty(&res)?);
             Ok(())
         }
@@ -461,7 +459,7 @@ async fn main() -> Result<()> {
         }
         Commands::Hydrate { profile, files, json } => {
             use chronos_core::{
-                graph::persistent::PersistentGraph,
+                session::WorkspaceSession,
                 telemetry::{hydration::hydrate_graph, profile_loader::load_profile_from_file},
             };
             let profile_abs = if profile.is_absolute() {
@@ -469,22 +467,19 @@ async fn main() -> Result<()> {
             } else {
                 workspace.join(&profile)
             };
-            let session = load_profile_from_file(&profile_abs)?;
-            let mut graph = build_cli_graph(&workspace, &files)?;
-            let report = hydrate_graph(&mut graph, &session);
+            let telemetry_session = load_profile_from_file(&profile_abs)?;
+            let mut session = WorkspaceSession::open(workspace, false)?;
+            session.ensure_indexed_files(&files, 300)?;
+            let report = hydrate_graph(&mut session.graph, &telemetry_session);
 
-            let db_path = workspace.join(".chronos").join("graph.kuzu");
-            if let Some(parent) = db_path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            if let Ok(db) = PersistentGraph::open(&db_path) {
-                let _ = db.sync_from_graph(&graph);
+            if let Some(ref repo) = session.repo {
+                let _ = repo.sync_from_graph(&session.graph);
             }
 
             if json {
                 let out = serde_json::json!({
-                    "backend": session.backend,
-                    "total_duration_ms": session.total_duration_ms,
+                    "backend": telemetry_session.backend,
+                    "total_duration_ms": telemetry_session.total_duration_ms,
                     "total_profiled_functions": report.total_profiled,
                     "hydrated_nodes": report.hydrated_count,
                     "cold_nodes": report.cold_count,
@@ -492,7 +487,7 @@ async fn main() -> Result<()> {
                 });
                 println!("{}", serde_json::to_string_pretty(&out)?);
             } else {
-                println!("{}", session.summary());
+                println!("{}", telemetry_session.summary());
                 println!("{}", report);
             }
             Ok(())
@@ -644,61 +639,7 @@ async fn main() -> Result<()> {
 }
 
 fn build_cli_graph(workspace: &std::path::Path, explicit_files: &[PathBuf]) -> Result<chronos_core::graph::schema::ChronosGraph> {
-    use chronos_core::{
-        ast::dispatcher::LanguageDispatcher,
-        graph::schema::ChronosGraph,
-    };
-    let mut graph = ChronosGraph::new();
-    let mut dispatcher = LanguageDispatcher::new()?;
-    let mut targets = Vec::new();
-
-    if explicit_files.is_empty() {
-        collect_cli_files(workspace, &mut targets, 300);
-    } else {
-        for p in explicit_files {
-            let resolved = if p.is_absolute() { p.clone() } else { workspace.join(p) };
-            if resolved.is_dir() {
-                collect_cli_files(&resolved, &mut targets, 300);
-            } else if resolved.exists() {
-                targets.push(resolved);
-            }
-        }
-    }
-
-    for file in targets {
-        if LanguageDispatcher::is_supported(&file) {
-            if let Ok(parsed) = dispatcher.parse_file(&file) {
-                graph.ingest_parsed_module(&parsed);
-            }
-        }
-    }
-    graph.resolve_pending_calls_and_routes();
-    chronos_core::graph::git_coupling::ingest_git_co_changes(&mut graph, workspace, 200);
-    Ok(graph)
-}
-
-fn collect_cli_files(dir: &std::path::Path, out: &mut Vec<PathBuf>, max_files: usize) {
-    use chronos_core::ast::dispatcher::LanguageDispatcher;
-    if out.len() >= max_files {
-        return;
-    }
-    let Ok(entries) = std::fs::read_dir(dir) else { return; };
-    for entry in entries.flatten() {
-        if out.len() >= max_files {
-            break;
-        }
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
-        if path.is_dir() {
-            if matches!(
-                name.as_str(),
-                ".git" | "node_modules" | "target" | ".venv" | "venv" | ".chronos" | "dist" | "build" | "out"
-            ) {
-                continue;
-            }
-            collect_cli_files(&path, out, max_files);
-        } else if LanguageDispatcher::is_supported(&path) {
-            out.push(path);
-        }
-    }
+    let mut session = chronos_core::session::WorkspaceSession::open(workspace.to_path_buf(), false)?;
+    session.ensure_indexed_files(explicit_files, 300)?;
+    Ok(session.graph)
 }

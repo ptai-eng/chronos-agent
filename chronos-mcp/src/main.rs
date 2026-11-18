@@ -2,7 +2,12 @@
 
 use anyhow::Result;
 use clap::Parser;
-use chronos_mcp::{server::run_server, state::new_shared_state, watcher::FileWatcher};
+use chronos_core::session::normalize_workspace_root;
+use chronos_mcp::{
+    server::run_server,
+    state::new_shared_state_with_options,
+    watcher::FileWatcher,
+};
 use std::path::PathBuf;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -37,6 +42,10 @@ struct Args {
     /// Disable real-time file watcher (useful for CI environments)
     #[arg(long)]
     no_watch: bool,
+
+    /// Run server in strict read-only mode (disables disk/workspace write operations)
+    #[arg(long)]
+    readonly: bool,
 }
 
 #[tokio::main]
@@ -59,11 +68,10 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
 
     // Resolve workspace root
-    let workspace_root = args.workspace.canonicalize()
-        .unwrap_or_else(|_| args.workspace.clone());
+    let workspace_root = normalize_workspace_root(&args.workspace);
 
-    // Initialize shared state
-    let state = new_shared_state(workspace_root.clone());
+    // Initialize shared state backed by WorkspaceSession
+    let state = new_shared_state_with_options(workspace_root.clone(), args.readonly);
 
     tracing::info!("CHRONOS MCP Server v{}", env!("CARGO_PKG_VERSION"));
     tracing::info!("Workspace: {}", workspace_root.display());

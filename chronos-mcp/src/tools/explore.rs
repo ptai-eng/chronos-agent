@@ -11,10 +11,9 @@
 //! - 4-Angle Code Review diagnostics (`Reuse`, `Efficiency`, `Simplification`, `Altitude`)
 
 use crate::protocol::CallToolResult;
-use crate::state::{ChronosState, SharedState};
-use chronos_core::{ast::dispatcher::LanguageDispatcher, graph::query::GraphQueryEngine};
+use crate::state::SharedState;
+use chronos_core::graph::query::GraphQueryEngine;
 use serde_json::{json, Value};
-use std::path::{Path, PathBuf};
 
 pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallToolResult {
     let query = match params
@@ -55,33 +54,14 @@ pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallTo
         if needs_index {
             let mut st = state.write().await;
             if st.graph.node_count() == 0 {
-                let root = st.workspace_root.clone();
-                if let Ok(mut dispatcher) = LanguageDispatcher::new() {
-                    let mut files = Vec::new();
-                    collect_supported_files(&root, &mut files, 300);
-                    let ChronosState {
-                        ref mut graph,
-                        ref db,
-                        ..
-                    } = *st;
-                    if let Some(ref db_inst) = db {
-                        let _ = db_inst.sync_workspace_incremental(graph, &files, &mut dispatcher);
-                    } else {
-                        for f in &files {
-                            if let Ok(parsed) = dispatcher.parse_file(f) {
-                                graph.ingest_parsed_module(&parsed);
-                            }
-                        }
-                        graph.resolve_pending_calls_and_routes();
-                    }
-                    chronos_core::graph::git_coupling::ingest_git_co_changes(graph, &root, 200);
-                }
+                let _ = st.session.ensure_indexed(None, 300);
             }
         }
     }
 
     let st = state.read().await;
     let status = st.graph.status_report();
+    let (cov, _, _) = chronos_core::blast_radius::impact_matrix::CoverageReport::from_graph(&st.graph);
     let qe = GraphQueryEngine::new(&st.graph);
     let explore_res = qe.explore_graph(&query, file_filter.as_deref(), max_symbols);
 
@@ -89,18 +69,12 @@ pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallTo
         "status": "ok",
         "explore": explore_res,
         "coverage": {
-            "completeness": if status.total_edges == 0 {
-                "unknown"
-            } else if status.unresolved_calls == 0 && status.hydrated_nodes > 0 {
-                "complete"
-            } else {
-                "partial"
-            },
+            "completeness": cov.completeness,
             "total_nodes": status.total_nodes,
             "total_edges": status.total_edges,
-            "resolved_calls": status.resolved_calls,
-            "unresolved_calls": status.unresolved_calls,
-            "telemetry_hydrated": status.hydrated_nodes > 0
+            "resolved_calls": cov.resolved_calls,
+            "unresolved_calls": cov.unresolved_calls,
+            "telemetry_hydrated": cov.telemetry_hydrated
         },
         "_meta": {
             "provenance": {
@@ -111,35 +85,4 @@ pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallTo
     });
 
     CallToolResult::text(serde_json::to_string_pretty(&output).unwrap_or_default())
-}
-
-fn collect_supported_files(dir: &Path, out: &mut Vec<PathBuf>, max_files: usize) {
-    if out.len() >= max_files {
-        return;
-    }
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        if out.len() >= max_files {
-            break;
-        }
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.')
-            || name == "node_modules"
-            || name == "target"
-            || name == "dist"
-            || name == "build"
-            || name == "__pycache__"
-            || name == "venv"
-        {
-            continue;
-        }
-        if path.is_dir() {
-            collect_supported_files(&path, out, max_files);
-        } else if LanguageDispatcher::is_supported(&path) {
-            out.push(path);
-        }
-    }
 }

@@ -14,6 +14,7 @@
 //! 4. **Error Swallowing:** Suppress `throw` / empty catch blocks
 //! 5. **HTTP Status Codes:** `200` ↔ `500`, `201` ↔ `400`
 
+use crate::ast::TextEdit;
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh64::xxh64;
 
@@ -72,6 +73,9 @@ pub struct Mutant {
     pub target_line: usize,
     /// The kind of mutation applied
     pub kind: MutantKind,
+    /// Tight byte-span `TextEdit` representing this mutation (shared seam with `v1.8` AST editing)
+    #[serde(default)]
+    pub text_edit: Option<TextEdit>,
     /// The mutated source code (full file content)
     pub mutated_source: String,
     /// Whether this mutant was killed (test failed = detected the bug)
@@ -87,16 +91,24 @@ impl Mutant {
         target_file: impl Into<String>,
         target_line: usize,
         kind: MutantKind,
-        _original_source: &str,
+        original_source: &str,
         mutated_source: impl Into<String>,
     ) -> Self {
+        let target_file_str = target_file.into();
         let mutated = mutated_source.into();
         let id = xxh64(mutated.as_bytes(), 42);
+        let text_edit = compute_line_text_edit(
+            &target_file_str,
+            target_line,
+            original_source,
+            &mutated,
+        );
         Self {
             id,
-            target_file: target_file.into(),
+            target_file: target_file_str,
             target_line,
             kind,
+            text_edit,
             mutated_source: mutated,
             killed: false,
             timed_out: false,
@@ -116,6 +128,32 @@ impl Mutant {
         self.killed = true;
         self.killed_by = Some("[timeout]".to_string());
     }
+}
+
+fn compute_line_text_edit(
+    file_path: &str,
+    target_line: usize,
+    original_source: &str,
+    mutated_source: &str,
+) -> Option<TextEdit> {
+    let idx = target_line.checked_sub(1)?;
+    let mut_line = mutated_source.lines().nth(idx)?;
+    let mut offset = 0usize;
+    for (i, seg) in original_source.split_inclusive('\n').enumerate() {
+        if i == idx {
+            let trimmed_len = seg.trim_end_matches(&['\r', '\n'][..]).len();
+            return Some(TextEdit::new(
+                file_path,
+                offset,
+                offset + trimmed_len,
+                target_line,
+                target_line,
+                mut_line,
+            ));
+        }
+        offset += seg.len();
+    }
+    None
 }
 
 /// Generate all safe mutants from a TypeScript/JavaScript source string.

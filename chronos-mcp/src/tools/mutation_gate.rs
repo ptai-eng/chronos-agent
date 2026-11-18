@@ -80,7 +80,9 @@ pub async fn handle_mutation_gate(state: SharedState, params: Option<Value>) -> 
 
     let report = {
         let st = state.read().await;
-        let arena = MutationArena::new(&st.graph).with_config(watchdog_config);
+        let arena = MutationArena::new(&st.graph)
+            .with_config(watchdog_config)
+            .with_strict(strict_mode);
         arena.run(&abs_path, None, &workspace_root).await
     };
 

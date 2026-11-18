@@ -14,6 +14,7 @@
 //! - `chronos_contract_status` → Drain Pre-Tool Execution Gate alerts
 
 pub mod protocol;
+pub mod registry;
 pub mod server;
 pub mod state;
 pub mod tools;

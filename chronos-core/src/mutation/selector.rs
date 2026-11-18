@@ -128,7 +128,6 @@ pub fn select_covering_tests<'g>(
 mod tests {
     use super::*;
     use crate::graph::schema::*;
-    use std::path::PathBuf;
 
     fn make_graph_with_test_coverage() -> (ChronosGraph, NodeId) {
         let mut graph = ChronosGraph::new();
@@ -140,7 +139,7 @@ mod tests {
             NodeKind::Function,
             "getUser",
             "UserService::getUser",
-            SourceLocation { file: PathBuf::from("src/user.ts"), start_line: 5, start_col: 0, end_line: 10, end_col: 1 },
+            SourceLocation::lines("src/user.ts", 5, 10),
         );
         graph.add_node(fn_node);
 
@@ -151,7 +150,7 @@ mod tests {
             NodeKind::TestCase,
             "it(should return user by id)",
             "tests/user.test.ts::it(should return user by id)",
-            SourceLocation { file: PathBuf::from("tests/user.test.ts"), start_line: 5, start_col: 0, end_line: 12, end_col: 1 },
+            SourceLocation::lines("tests/user.test.ts", 5, 12),
         );
         graph.add_node(test_node);
 
@@ -182,7 +181,7 @@ mod tests {
             NodeKind::Function,
             "weirdFunction",
             "obscure::weirdFunction",
-            SourceLocation { file: PathBuf::from("src/obscure.ts"), start_line: 1, start_col: 0, end_line: 5, end_col: 1 },
+            SourceLocation::lines("src/obscure.ts", 1, 5),
         );
         graph.add_node(fn_node);
 

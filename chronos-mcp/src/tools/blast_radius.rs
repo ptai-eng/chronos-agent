@@ -10,10 +10,8 @@ use chronos_core::{
         markdown_glance::{generate_glance_markdown, generate_inline_status},
         visualizer::generate_html_dashboard,
     },
-    graph::schema::{NodeId, NodeKind},
 };
 use serde_json::Value;
-use tracing::debug;
 
 pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> CallToolResult {
     let symbol_name = match params.as_ref()
@@ -47,46 +45,11 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
         );
     }
 
-    // Try to find the node — try multiple kinds + file hints, then search all nodes in graph
-    let node_kinds = [
-        NodeKind::Function,
-        NodeKind::Class,
-        NodeKind::ApiRoute,
-        NodeKind::TestCase,
-    ];
-
-    let mut candidate_id: Option<NodeId> = None;
-
-    if let Some(ref file) = file_hint {
-        for kind in &node_kinds {
-            let id = NodeId::new(file, &symbol_name, kind);
-            if st.graph.get_node(&id).is_some() {
-                candidate_id = Some(id);
-                break;
-            }
-        }
-    }
-
-    // Fallback: search all nodes in the graph by exact name or qualified_name
-    if candidate_id.is_none() {
-        debug!("Searching all nodes for symbol '{}'", symbol_name);
-        let all_nodes = st.graph.all_nodes();
-        if let Some(matched) = all_nodes.iter().find(|n| {
-            let file_matches = file_hint.as_ref().map_or(true, |hint| {
-                n.location.file.to_string_lossy().ends_with(hint.as_str())
-            });
-            file_matches && (n.name == symbol_name || n.qualified_name == symbol_name)
-        }) {
-            candidate_id = Some(matched.id.clone());
-        } else if let Some(matched) = all_nodes.iter().find(|n| {
-            n.name == symbol_name || n.qualified_name == symbol_name
-        }) {
-            candidate_id = Some(matched.id.clone());
-        }
-    }
-
-    let node_id = match candidate_id {
-        Some(id) => id,
+    let node_id = match st
+        .graph
+        .resolve_first_symbol(&symbol_name, file_hint.as_deref())
+    {
+        Some(node) => node.id.clone(),
         None => {
             return CallToolResult::text(format!(
                 "⚠️ **Symbol `{}` not found in 4D graph.**\n\n\

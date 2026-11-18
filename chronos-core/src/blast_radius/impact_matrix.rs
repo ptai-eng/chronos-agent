@@ -90,6 +90,57 @@ impl Default for CoverageReport {
     }
 }
 
+impl CoverageReport {
+    /// Unified single source of truth computing call-graph + telemetry coverage and uncertainty bounds.
+    pub fn from_graph(graph: &ChronosGraph) -> (Self, Vec<String>, f32) {
+        let status = graph.status_report();
+        let call_edges_available = status.total_edges > 0;
+        let telemetry_hydrated = status.hydrated_nodes > 0;
+        let completeness = if !call_edges_available {
+            "unknown".to_string()
+        } else if status.unresolved_calls == 0 && telemetry_hydrated {
+            "complete".to_string()
+        } else {
+            "partial".to_string()
+        };
+
+        let mut unknowns = Vec::new();
+        let mut uncertainty: f32 = 0.05;
+
+        if !call_edges_available {
+            unknowns.push(
+                "0 call edges in graph: callers may be unobserved if dependent files were not analyzed".to_string()
+            );
+            uncertainty += 0.20;
+        }
+        if status.unresolved_calls > 0 {
+            unknowns.push(format!(
+                "{} dynamic/external call site(s) could not be statically resolved",
+                status.unresolved_calls
+            ));
+            uncertainty += 0.10;
+        }
+        if !telemetry_hydrated {
+            unknowns.push(
+                "Runtime telemetry is cold; hot-path weighting uses static complexity + PageRank fallback".to_string()
+            );
+            uncertainty += 0.15;
+        }
+
+        (
+            Self {
+                call_edges_available,
+                completeness,
+                resolved_calls: status.resolved_calls,
+                unresolved_calls: status.unresolved_calls,
+                telemetry_hydrated,
+            },
+            unknowns,
+            uncertainty,
+        )
+    }
+}
+
 /// Structured, line-anchored code review finding with concrete failure scenario.
 /// Inspired by Anthropic Claude Code `report-findings-tool.md` and OpenAI Codex `codex-auto-review.md`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,51 +219,7 @@ impl<'g> ImpactAnalyzer<'g> {
     }
 
     fn build_coverage_and_unknowns(&self) -> (CoverageReport, Vec<String>, f32) {
-        let status = self.graph.status_report();
-        let call_edges_available = status.total_edges > 0;
-        let telemetry_hydrated = status.hydrated_nodes > 0;
-        let completeness = if !call_edges_available {
-            "unknown".to_string()
-        } else if status.unresolved_calls == 0 && telemetry_hydrated {
-            "complete".to_string()
-        } else {
-            "partial".to_string()
-        };
-
-        let mut unknowns = Vec::new();
-        let mut uncertainty: f32 = 0.05;
-
-        if !call_edges_available {
-            unknowns.push(
-                "0 call edges in graph: callers may be unobserved if dependent files were not analyzed".to_string()
-            );
-            uncertainty += 0.20;
-        }
-        if status.unresolved_calls > 0 {
-            unknowns.push(format!(
-                "{} dynamic/external call site(s) could not be statically resolved",
-                status.unresolved_calls
-            ));
-            uncertainty += 0.10;
-        }
-        if !telemetry_hydrated {
-            unknowns.push(
-                "Runtime telemetry is cold; hot-path weighting uses static complexity + PageRank fallback".to_string()
-            );
-            uncertainty += 0.15;
-        }
-
-        (
-            CoverageReport {
-                call_edges_available,
-                completeness,
-                resolved_calls: status.resolved_calls,
-                unresolved_calls: status.unresolved_calls,
-                telemetry_hydrated,
-            },
-            unknowns,
-            uncertainty,
-        )
+        CoverageReport::from_graph(self.graph)
     }
 
     /// Analyze the blast radius of changing a specific node.
@@ -326,10 +333,7 @@ impl<'g> ImpactAnalyzer<'g> {
             }
         }
 
-        if changed_node.heuristics.linear_scan_in_loop > 0
-            || changed_node.heuristics.alloc_in_loop > 0
-            || changed_node.heuristics.transitive_loop_depth >= 3
-        {
+        if changed_node.heuristics.is_efficiency_hotspot() {
             structured_findings.push(StructuredFinding {
                 file: changed_file.clone(),
                 line: changed_line,
@@ -354,9 +358,7 @@ impl<'g> ImpactAnalyzer<'g> {
             });
         }
 
-        if changed_node.heuristics.cyclomatic_complexity >= 5
-            || changed_node.heuristics.cognitive_load_score >= 25.0
-        {
+        if changed_node.heuristics.is_simplification_candidate() {
             structured_findings.push(StructuredFinding {
                 file: changed_file.clone(),
                 line: changed_line,
@@ -662,7 +664,6 @@ fn compute_overall_impact(
 mod tests {
     use super::*;
     use crate::graph::schema::*;
-    use std::path::PathBuf;
 
     fn make_simple_graph() -> (ChronosGraph, NodeId, NodeId) {
         let mut graph = ChronosGraph::new();
@@ -673,7 +674,7 @@ mod tests {
             NodeKind::Function,
             "getUser",
             "UserService::getUser",
-            SourceLocation { file: PathBuf::from("src/user.ts"), start_line: 5, start_col: 0, end_line: 15, end_col: 1 },
+            SourceLocation::lines("src/user.ts", 5, 15),
         );
         graph.add_node(fn_node);
 
@@ -683,7 +684,7 @@ mod tests {
             NodeKind::Function,
             "handleRequest",
             "api::handleRequest",
-            SourceLocation { file: PathBuf::from("src/api.ts"), start_line: 20, start_col: 0, end_line: 30, end_col: 1 },
+            SourceLocation::lines("src/api.ts", 20, 30),
         );
         graph.add_node(caller_node);
 
@@ -725,7 +726,7 @@ mod tests {
             NodeKind::Function,
             "unusedHelper",
             "isolated::unusedHelper",
-            SourceLocation { file: PathBuf::from("src/isolated.ts"), start_line: 1, start_col: 0, end_line: 5, end_col: 1 },
+            SourceLocation::lines("src/isolated.ts", 1, 5),
         );
         graph.add_node(fn_node);
 

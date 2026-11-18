@@ -10,8 +10,8 @@
 //! Cline, Windsurf, Continue, Zed.
 
 use crate::protocol::{InitializeResult, JsonRpcRequest, JsonRpcResponse, ServerCapabilities, ServerInfo, ToolsCapability};
+use crate::registry::McpToolRegistry;
 use crate::state::SharedState;
-use crate::tools;
 use anyhow::Result;
 use serde_json::json;
 use std::io::{self, BufRead, Write};
@@ -70,12 +70,15 @@ async fn handle_request(req: JsonRpcRequest, state: SharedState) -> JsonRpcRespo
                 .as_ref()
                 .and_then(|p| p.get("rootPath").or_else(|| p.get("rootUri")))
                 .and_then(|v| v.as_str())
-                .map(|s| s.trim_start_matches("file://").to_string());
+                .map(std::path::PathBuf::from);
 
             if let Some(root) = workspace_root {
                 let mut st = state.write().await;
-                st.workspace_root = std::path::PathBuf::from(&root);
-                info!("Workspace root set to: {}", root);
+                if let Err(e) = st.session.rebind_workspace(root) {
+                    warn!("Workspace rebind failed: {}", e);
+                } else {
+                    info!("Workspace root bound to: {}", st.workspace_root.display());
+                }
             }
 
             let result = InitializeResult {
@@ -101,7 +104,8 @@ async fn handle_request(req: JsonRpcRequest, state: SharedState) -> JsonRpcRespo
 
         // ── Tools ────────────────────────────────────────────────────
         "tools/list" => {
-            let tool_list = tools::all_tools();
+            let readonly = state.read().await.readonly;
+            let tool_list = McpToolRegistry::list_tools(readonly);
             JsonRpcResponse::ok(id, json!({ "tools": tool_list }))
         }
 
@@ -116,58 +120,15 @@ async fn handle_request(req: JsonRpcRequest, state: SharedState) -> JsonRpcRespo
                 .cloned();
 
             match tool_name.as_deref() {
-                Some("chronos_analyze_file") => {
-                    let result = tools::handle_analyze_file(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_query_hotspots") => {
-                    let result = tools::handle_query_hotspots(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_blast_radius") => {
-                    let result = tools::handle_blast_radius(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_mutation_gate") => {
-                    let result = tools::handle_mutation_gate(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_contract_status") => {
-                    let result = tools::handle_contract_status(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_query_graph") => {
-                    let result = tools::handle_query_graph(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_search_graph") => {
-                    let result = tools::handle_search_graph(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_get_snippet") => {
-                    let result = tools::handle_get_snippet(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_get_architecture") => {
-                    let result = tools::handle_get_architecture(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_hydrate_telemetry") => {
-                    let result = tools::handle_hydrate_telemetry(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_generate_agents_md") => {
-                    let result = tools::handle_generate_agents_md(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some("chronos_explore") => {
-                    let result = tools::handle_explore(state, tool_params).await;
-                    JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap())
-                }
-                Some(unknown) => {
-                    warn!("Unknown tool called: {}", unknown);
-                    JsonRpcResponse::err(id, -32601, format!("Tool not found: {}", unknown))
-                }
+                Some(name) => match McpToolRegistry::dispatch(state, name, tool_params).await {
+                    Ok(result) => JsonRpcResponse::ok(id, serde_json::to_value(result).unwrap()),
+                    Err(err) => JsonRpcResponse {
+                        jsonrpc: "2.0",
+                        id,
+                        result: None,
+                        error: Some(err),
+                    },
+                },
                 None => {
                     JsonRpcResponse::err(id, -32602, "Missing tool name in tools/call params")
                 }

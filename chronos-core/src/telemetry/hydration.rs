@@ -117,7 +117,6 @@ mod tests {
     use super::*;
     use crate::graph::schema::*;
     use crate::telemetry::adapter::TelemetryData;
-    use std::path::PathBuf;
 
     fn make_graph_with_functions(names: &[&str]) -> ChronosGraph {
         let mut graph = ChronosGraph::new();
@@ -125,7 +124,7 @@ mod tests {
             let id = NodeId::new("src/api.ts", name, &NodeKind::Function);
             let node = ChronosNode::new(
                 id, NodeKind::Function, *name, format!("Module::{}", name),
-                SourceLocation { file: PathBuf::from("src/api.ts"), start_line: 1, start_col: 0, end_line: 10, end_col: 1 },
+                SourceLocation::lines("src/api.ts", 1, 10),
             );
             graph.add_node(node);
         }

@@ -564,24 +564,7 @@ impl<'g> GraphQueryEngine<'g> {
         symbol_name: &str,
         file_filter: Option<&str>,
     ) -> Option<CodeSnippetResult> {
-        let all_nodes = self.graph.all_nodes();
-        let matched = all_nodes
-            .iter()
-            .find(|n| {
-                let name_ok = n.name == symbol_name
-                    || n.qualified_name == symbol_name
-                    || n.name.ends_with(&format!(".{symbol_name}"))
-                    || n.name.ends_with(&format!("::{symbol_name}"));
-                let file_ok = file_filter.map_or(true, |f| {
-                    n.location
-                        .file
-                        .to_string_lossy()
-                        .replace('\\', "/")
-                        .contains(&f.replace('\\', "/"))
-                });
-                name_ok && file_ok
-            })
-            .copied()?;
+        let matched = self.graph.resolve_first_symbol(symbol_name, file_filter)?;
 
         let pagerank = self.graph.compute_pagerank(15, 0.85);
         let pr = pagerank.get(&matched.id).copied().unwrap_or(0.0);
@@ -1033,10 +1016,7 @@ impl<'g> GraphQueryEngine<'g> {
         out.extend(self.find_reuse_candidates(node));
 
         // 2. Angle: Efficiency
-        if node.heuristics.linear_scan_in_loop > 0
-            || node.heuristics.alloc_in_loop > 0
-            || node.heuristics.transitive_loop_depth >= 3
-        {
+        if node.heuristics.is_efficiency_hotspot() {
             out.push(FourAngleDiagnostic {
                 angle: "Efficiency".to_string(),
                 symbol: node.name.clone(),
@@ -1067,10 +1047,7 @@ impl<'g> GraphQueryEngine<'g> {
         }
 
         // 3. Angle: Simplification
-        if node.heuristics.cyclomatic_complexity >= 5
-            || node.heuristics.cognitive_load_score >= 25.0
-            || node.heuristics.loop_depth >= 2
-        {
+        if node.heuristics.is_simplification_candidate() {
             out.push(FourAngleDiagnostic {
                 angle: "Simplification".to_string(),
                 symbol: node.name.clone(),
@@ -1185,14 +1162,10 @@ impl<'g> GraphQueryEngine<'g> {
             .take(cap)
         {
             if let Some(snippet) = self.get_code_snippet(&hit.node.name, Some(&hit.node.file)) {
-                let node_id = self.graph.all_nodes().into_iter().find_map(|n| {
-                    let f = n.location.file.to_string_lossy().replace('\\', "/");
-                    if n.name == hit.node.name && f == hit.node.file {
-                        Some(n.id.clone())
-                    } else {
-                        None
-                    }
-                });
+                let node_id = self
+                    .graph
+                    .resolve_first_symbol(&hit.node.name, Some(&hit.node.file))
+                    .map(|n| n.id.clone());
 
                 let (surfaces, diags) = if let Some(ref id) = node_id {
                     (
@@ -1249,6 +1222,63 @@ impl<'g> GraphQueryEngine<'g> {
 }
 
 /// Split `camelCase`, `PascalCase`, `snake_case`, and whitespace into lowercase tokens.
+/// Seam alias highlighting the deepened index role of `GraphQueryEngine`.
+pub type CodeIndex<'g> = GraphQueryEngine<'g>;
+
+/// Semantic diagnostics + caller/callee summary returned across the `SemanticResolver` seam.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticDiagnosticsSummary {
+    pub adapter_name: String,
+    pub resolved_symbol: Option<String>,
+    pub callers: Vec<String>,
+    pub callees: Vec<String>,
+    pub compiler_diagnostics: Vec<String>,
+}
+
+/// Ports & Adapters seam unifying fast in-process Tree-sitter resolution (`AstSemanticAdapter`)
+/// and optional `v1.8` compiler-grade LSP resolution (`LspAdapter`).
+pub trait SemanticResolver: Send + Sync {
+    fn adapter_name(&self) -> &'static str;
+    fn resolve_references(&self, symbol: &str, file_hint: Option<&str>) -> SemanticDiagnosticsSummary;
+}
+
+/// Default `<15ms` zero-dependency adapter backed by the in-memory `ChronosGraph`.
+pub struct AstSemanticAdapter<'g> {
+    graph: &'g ChronosGraph,
+}
+
+impl<'g> AstSemanticAdapter<'g> {
+    pub fn new(graph: &'g ChronosGraph) -> Self {
+        Self { graph }
+    }
+}
+
+impl<'g> SemanticResolver for AstSemanticAdapter<'g> {
+    fn adapter_name(&self) -> &'static str {
+        "chronos-ast-adapter"
+    }
+
+    fn resolve_references(&self, symbol: &str, file_hint: Option<&str>) -> SemanticDiagnosticsSummary {
+        if let Some(node) = self.graph.resolve_first_symbol(symbol, file_hint) {
+            SemanticDiagnosticsSummary {
+                adapter_name: self.adapter_name().to_string(),
+                resolved_symbol: Some(node.qualified_name.clone()),
+                callers: self.graph.callers_of(&node.id).into_iter().map(|n| n.name.clone()).collect(),
+                callees: self.graph.callees_of(&node.id).into_iter().map(|n| n.name.clone()).collect(),
+                compiler_diagnostics: Vec::new(),
+            }
+        } else {
+            SemanticDiagnosticsSummary {
+                adapter_name: self.adapter_name().to_string(),
+                resolved_symbol: None,
+                callers: Vec::new(),
+                callees: Vec::new(),
+                compiler_diagnostics: Vec::new(),
+            }
+        }
+    }
+}
+
 pub fn tokenize_identifier(input: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
@@ -1283,7 +1313,6 @@ pub fn tokenize_identifier(input: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::graph::schema::*;
-    use std::path::PathBuf;
 
     fn make_fn_node(file: &str, name: &str) -> ChronosNode {
         let id = NodeId::new(file, name, &NodeKind::Function);
@@ -1292,13 +1321,7 @@ mod tests {
             NodeKind::Function,
             name,
             format!("{file}::{name}"),
-            SourceLocation {
-                file: PathBuf::from(file),
-                start_line: 1,
-                start_col: 0,
-                end_line: 10,
-                end_col: 1,
-            },
+            SourceLocation::lines(file, 1, 10),
         )
     }
 

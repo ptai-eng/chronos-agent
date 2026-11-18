@@ -12,7 +12,7 @@ This skill connects **Google Antigravity (`agy`)**, **Claude Code**, **OpenAI Co
 
 ## Primary High-Centrality Hubs in `chronos-agent`
 
-- **Top PageRank Hubs:** `new` (`0.0211`), `new` (`0.0190`), `new` (`0.0162`), `NodeId` (`0.0134`), `default` (`0.0117`)
+- **Top PageRank Hubs:** `new` (`0.0412`), `compute_line_text_edit` (`0.0358`), `lines` (`0.0334`), `new` (`0.0193`), `new` (`0.0127`)
 
 ## Mandatory 4-Step Verification Workflow (12 MCP Tools)
 

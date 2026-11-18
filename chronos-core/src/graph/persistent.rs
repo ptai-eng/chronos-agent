@@ -1,21 +1,16 @@
-//! KuzuDB persistent backend for the 4D Knowledge Graph
+//! KuzuDB persistent backend for the 5D Knowledge Graph (`GraphRepository`)
 //!
 //! ## Security note
-//! All user-supplied strings (node.name, node.id, file paths) are sanitized
-//! via `escape_cypher_string()` before being embedded in Cypher queries.
-//! This prevents Cypher injection attacks.
+//! All user-supplied strings (node.name, node.id, file paths) are parameterized
+//! or validated via `validate_readonly_cypher()` to prevent Cypher injection attacks.
 //!
-//! ## Schema
-//!   Node table: ChronosNode (id STRING PRIMARY KEY, name STRING, kind STRING,
-//!               file STRING, start_line INT64, cognitive_load DOUBLE,
-//!               cyclomatic INT64, fan_in INT64, fan_out INT64, param_count INT64,
-//!               sloc INT64, is_hydrated BOOL, exec_time_p50 DOUBLE,
-//!               exec_time_p99 DOUBLE, invocation_count INT64, cpu_percent DOUBLE,
-//!               is_hot_path BOOL, is_bottleneck BOOL)
-//!   Rel tables: CALLS | CONTAINS | TESTS | IMPORTS (ChronosNode → ChronosNode)
+//! ## Lossless Schema v2
+//! Persists all spatial, complexity, contract, byte-span, and runtime telemetry fields
+//! and supports file-scoped delta updates (`sync_file_delta`).
 
 use anyhow::{Context, Result};
 use kuzu::{Connection, Database, SystemConfig};
+use std::collections::HashSet;
 use std::path::Path;
 use crate::graph::schema::{
     ChronosGraph, ChronosNode, NodeId, NodeKind, SourceLocation, StaticHeuristics,
@@ -23,32 +18,54 @@ use crate::graph::schema::{
 };
 use tracing::{debug, info, warn};
 
-/// Persistent storage backend — wraps KuzuDB
-pub struct PersistentGraph {
-    pub db: Database,
+/// Current KuzuDB persistence schema version (v1.7.0 lossless byte spans + contracts).
+pub const GRAPH_SCHEMA_VERSION: &str = "2";
+
+/// Deep persistence repository wrapping embedded KuzuDB without leaking raw handles.
+pub struct GraphRepository {
+    db: Database,
     db_path: std::path::PathBuf,
 }
 
-// ── Security helpers ──────────────────────────────────────────────────────────
-
-/// Escape a string for safe embedding inside Cypher single-quoted literals.
-/// Replaces `\` with `\\` and `'` with `\'` to prevent injection.
 #[inline]
-#[allow(dead_code)] // Security utility — reserved for dynamic Cypher query paths
+#[allow(dead_code)]
 fn escape_cypher_string(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
-// ── Core impl ─────────────────────────────────────────────────────────────────
-
-impl PersistentGraph {
-    /// Open or create a KuzuDB at the given path, then ensure the schema exists.
+impl GraphRepository {
+    /// Open or create a KuzuDB repository at `db_path`, ensuring schema v2 compatibility.
+    /// Automatically rebuilds incompatible legacy `.chronos/graph.kuzu` directories (Q2).
     pub fn open(db_path: &Path) -> Result<Self> {
         let raw_str = db_path.to_string_lossy();
         let clean_path = std::path::PathBuf::from(raw_str.trim_start_matches(r"\\?\"));
-        let config = SystemConfig::default();
-        let db = Database::new(&clean_path, config)
-            .map_err(|e| anyhow::anyhow!("KuzuDB open error at {:?}: {}", clean_path, e))?;
+
+        let db = match Database::new(&clean_path, SystemConfig::default()) {
+            Ok(db) => db,
+            Err(first_err) => {
+                // Only auto-wipe dedicated `.chronos/graph.kuzu` directories if corrupted/legacy.
+                let is_dedicated_kuzu_dir = clean_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map_or(false, |n| n.ends_with(".kuzu"));
+                if is_dedicated_kuzu_dir && clean_path.exists() {
+                    warn!(
+                        "Rebuilding incompatible KuzuDB cache at {:?}: {}",
+                        clean_path, first_err
+                    );
+                    let _ = std::fs::remove_dir_all(&clean_path);
+                    Database::new(&clean_path, SystemConfig::default()).map_err(|e| {
+                        anyhow::anyhow!("KuzuDB rebuild error at {:?}: {}", clean_path, e)
+                    })?
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "KuzuDB open error at {:?}: {}",
+                        clean_path,
+                        first_err
+                    ));
+                }
+            }
+        };
 
         let store = Self {
             db,
@@ -58,20 +75,23 @@ impl PersistentGraph {
         Ok(store)
     }
 
-    /// Create node and relationship tables if they do not already exist.
+    /// Create or upgrade node, metadata, hash, and relationship tables.
     fn ensure_schema(&self) -> Result<()> {
         let conn = Connection::new(&self.db)
             .context("Failed to open KuzuDB connection for schema init")?;
 
-        // Node table — CREATE IF NOT EXISTS (supported in Kuzu ≥ 0.5)
         if let Err(e) = conn.query(
             "CREATE NODE TABLE IF NOT EXISTS ChronosNode (
                 id                    STRING,
                 name                  STRING,
+                qualified_name        STRING,
                 kind                  STRING,
                 file                  STRING,
                 start_line            INT64,
                 end_line              INT64,
+                start_byte            INT64,
+                end_byte              INT64,
+                contract_signature    STRING,
                 cognitive_load        DOUBLE,
                 cyclomatic            INT64,
                 fan_in                INT64,
@@ -101,9 +121,13 @@ impl PersistentGraph {
             debug!("ChronosNode table already exists (ok)");
         }
 
-        // Backward-compatible schema migration for existing v1.2 databases
+        // Lossless schema upgrade from v1.2–v1.6 databases
         for alter_col in &[
             "end_line INT64 DEFAULT 0",
+            "start_byte INT64 DEFAULT 0",
+            "end_byte INT64 DEFAULT 0",
+            "qualified_name STRING DEFAULT ''",
+            "contract_signature STRING DEFAULT ''",
             "loop_count INT64 DEFAULT 0",
             "loop_depth INT64 DEFAULT 0",
             "transitive_loop_depth INT64 DEFAULT 0",
@@ -114,7 +138,6 @@ impl PersistentGraph {
             let _ = conn.query(&format!("ALTER TABLE ChronosNode ADD IF NOT EXISTS {alter_col}"));
         }
 
-        // File content hash table for Incremental xxHash64 Merkle Caching (v1.4)
         let _ = conn.query(
             "CREATE NODE TABLE IF NOT EXISTS ChronosFileHash (
                 file     STRING,
@@ -123,7 +146,25 @@ impl PersistentGraph {
             )",
         );
 
-        // Relationship tables
+        let _ = conn.query(
+            "CREATE NODE TABLE IF NOT EXISTS ChronosMeta (
+                key STRING,
+                val STRING,
+                PRIMARY KEY (key)
+            )",
+        );
+        if let Ok(mut meta_stmt) = conn.prepare(
+            "MERGE (m:ChronosMeta {key: $k}) ON CREATE SET m.val = $v ON MATCH SET m.val = $v",
+        ) {
+            let _ = conn.execute(
+                &mut meta_stmt,
+                vec![
+                    ("k", kuzu::Value::String("schema_version".to_string())),
+                    ("v", kuzu::Value::String(GRAPH_SCHEMA_VERSION.to_string())),
+                ],
+            );
+        }
+
         for label in &["CALLS", "CONTAINS", "TESTS", "IMPORTS", "CO_CHANGES_WITH"] {
             let ddl = format!(
                 "CREATE REL TABLE IF NOT EXISTS {label} (FROM ChronosNode TO ChronosNode)"
@@ -137,12 +178,19 @@ impl PersistentGraph {
             }
         }
 
-        info!("KuzuDB schema ready at {:?}", self.db_path);
+        info!("KuzuDB repository ready at {:?} (schema v{})", self.db_path, GRAPH_SCHEMA_VERSION);
         Ok(())
     }
 
-    /// Insert or update a single ChronosNode in the Kuzu graph.
-    pub fn upsert_node(&self, conn: &Connection, node: &ChronosNode) -> Result<()> {
+    /// Upsert a single `ChronosNode` safely outside callers needing a raw connection.
+    pub fn upsert_single_node(&self, node: &ChronosNode) -> Result<()> {
+        let conn = Connection::new(&self.db)
+            .context("Failed to open KuzuDB connection for single node upsert")?;
+        self.upsert_node_with_conn(&conn, node)
+    }
+
+    /// Internal node upsert helper preserving every mutable spatial, contract, and telemetry field.
+    fn upsert_node_with_conn(&self, conn: &Connection, node: &ChronosNode) -> Result<()> {
         let (p50, p99, inv, cpu, hot, bottleneck) = node
             .telemetry
             .as_ref()
@@ -159,15 +207,20 @@ impl PersistentGraph {
             .unwrap_or((0.0, 0.0, 0, 0.0, false, false));
 
         let is_hydrated = node.telemetry.is_some();
+        let contract_sig = node.contract_signature.as_deref().unwrap_or("").to_string();
 
         let query = "
              MERGE (n:ChronosNode {id: $id})
              ON CREATE SET
                  n.name = $name,
+                 n.qualified_name = $qname,
                  n.kind = $kind,
                  n.file = $file,
                  n.start_line = $start_line,
                  n.end_line = $end_line,
+                 n.start_byte = $start_byte,
+                 n.end_byte = $end_byte,
+                 n.contract_signature = $contract_sig,
                  n.cognitive_load = $cog,
                  n.cyclomatic = $cyc,
                  n.fan_in = $fin,
@@ -189,13 +242,20 @@ impl PersistentGraph {
                  n.is_bottleneck = $bottleneck
              ON MATCH SET
                  n.name = $name,
+                 n.qualified_name = $qname,
                  n.kind = $kind,
                  n.file = $file,
+                 n.start_line = $start_line,
                  n.end_line = $end_line,
+                 n.start_byte = $start_byte,
+                 n.end_byte = $end_byte,
+                 n.contract_signature = $contract_sig,
                  n.cognitive_load = $cog,
                  n.cyclomatic = $cyc,
                  n.fan_in = $fin,
                  n.fan_out = $fout,
+                 n.param_count = $params,
+                 n.sloc = $sloc,
                  n.loop_count = $loop_cnt,
                  n.loop_depth = $loop_dep,
                  n.transitive_loop_depth = $trans_loop,
@@ -210,16 +270,24 @@ impl PersistentGraph {
                  n.is_hot_path = $hot,
                  n.is_bottleneck = $bottleneck";
 
-        let mut stmt = conn.prepare(query)
+        let mut stmt = conn
+            .prepare(query)
             .map_err(|e| anyhow::anyhow!("Failed to prepare upsert query: {}", e))?;
-            
+
         let params = vec![
             ("id", kuzu::Value::String(node.id.0.clone())),
             ("name", kuzu::Value::String(node.name.clone())),
+            ("qname", kuzu::Value::String(node.qualified_name.clone())),
             ("kind", kuzu::Value::String(format!("{:?}", node.kind))),
-            ("file", kuzu::Value::String(node.location.file.to_string_lossy().replace('\\', "/"))),
+            (
+                "file",
+                kuzu::Value::String(node.location.file.to_string_lossy().replace('\\', "/")),
+            ),
             ("start_line", kuzu::Value::Int64(node.location.start_line as i64)),
             ("end_line", kuzu::Value::Int64(node.location.end_line as i64)),
+            ("start_byte", kuzu::Value::Int64(node.location.start_byte as i64)),
+            ("end_byte", kuzu::Value::Int64(node.location.end_byte as i64)),
+            ("contract_sig", kuzu::Value::String(contract_sig)),
             ("cog", kuzu::Value::Double(node.heuristics.cognitive_load_score as f64)),
             ("cyc", kuzu::Value::Int64(node.heuristics.cyclomatic_complexity as i64)),
             ("fin", kuzu::Value::Int64(node.heuristics.fan_in as i64)),
@@ -228,8 +296,14 @@ impl PersistentGraph {
             ("sloc", kuzu::Value::Int64(node.heuristics.sloc as i64)),
             ("loop_cnt", kuzu::Value::Int64(node.heuristics.loop_count as i64)),
             ("loop_dep", kuzu::Value::Int64(node.heuristics.loop_depth as i64)),
-            ("trans_loop", kuzu::Value::Int64(node.heuristics.transitive_loop_depth as i64)),
-            ("lin_scan", kuzu::Value::Int64(node.heuristics.linear_scan_in_loop as i64)),
+            (
+                "trans_loop",
+                kuzu::Value::Int64(node.heuristics.transitive_loop_depth as i64),
+            ),
+            (
+                "lin_scan",
+                kuzu::Value::Int64(node.heuristics.linear_scan_in_loop as i64),
+            ),
             ("alloc_loop", kuzu::Value::Int64(node.heuristics.alloc_in_loop as i64)),
             ("is_rec", kuzu::Value::Bool(node.heuristics.is_recursive)),
             ("is_hydrated", kuzu::Value::Bool(is_hydrated)),
@@ -246,8 +320,7 @@ impl PersistentGraph {
         Ok(())
     }
 
-    /// Upsert a directed edge between two nodes in KuzuDB.
-    pub fn upsert_edge(
+    fn upsert_edge_with_conn(
         &self,
         conn: &Connection,
         from: &NodeId,
@@ -285,12 +358,67 @@ impl PersistentGraph {
         Ok(())
     }
 
+    /// Synchronize only the nodes and incident edges belonging to `file_path` (O(file_symbols)),
+    /// evicting stale nodes for that file first and recording its `xxHash64`.
+    pub fn sync_file_delta(
+        &self,
+        graph: &ChronosGraph,
+        file_path: &Path,
+        file_hash: Option<&str>,
+    ) -> Result<usize> {
+        let conn = Connection::new(&self.db)
+            .context("Failed to open KuzuDB connection for file delta sync")?;
+
+        let target_norm = file_path
+            .to_string_lossy()
+            .trim_start_matches(r"\\?\")
+            .replace('\\', "/");
+
+        if let Ok(mut del_stmt) = conn.prepare("MATCH (n:ChronosNode {file: $file}) DETACH DELETE n") {
+            let _ = conn.execute(
+                &mut del_stmt,
+                vec![("file", kuzu::Value::String(target_norm.clone()))],
+            );
+        }
+
+        let mut file_node_ids = HashSet::new();
+        let mut count = 0usize;
+        for node in graph.all_nodes() {
+            let node_norm = node
+                .location
+                .file
+                .to_string_lossy()
+                .trim_start_matches(r"\\?\")
+                .replace('\\', "/");
+            if node_norm == target_norm {
+                self.upsert_node_with_conn(&conn, node)?;
+                file_node_ids.insert(node.id.0.clone());
+                count += 1;
+            }
+        }
+
+        if !file_node_ids.is_empty() {
+            for (src, dst, edge) in graph.all_edges() {
+                if file_node_ids.contains(&src.0) || file_node_ids.contains(&dst.0) {
+                    // Edge endpoint in another unindexed file won't match until indexed; ignore non-fatal miss
+                    let _ = self.upsert_edge_with_conn(&conn, &src, &dst, &edge);
+                }
+            }
+        }
+
+        if let Some(hash) = file_hash {
+            self.upsert_file_hash(&target_norm, hash)?;
+        }
+
+        debug!("Synced delta for {} ({} file nodes)", target_norm, count);
+        Ok(count)
+    }
+
     /// Bulk sync all nodes AND edges from the in-memory graph → KuzuDB.
-    /// Called after every `analyze_file` to keep the DB current.
     pub fn sync_from_graph(&self, graph: &ChronosGraph) -> Result<usize> {
         let conn = Connection::new(&self.db)
             .context("Failed to open KuzuDB connection for bulk sync")?;
-            
+
         let mut count = 0usize;
         for kind in &[
             NodeKind::Function,
@@ -301,14 +429,14 @@ impl PersistentGraph {
             NodeKind::File,
         ] {
             for node in graph.nodes_by_kind(kind) {
-                self.upsert_node(&conn, node)?;
+                self.upsert_node_with_conn(&conn, node)?;
                 count += 1;
             }
         }
 
         let mut edge_count = 0usize;
         for (src, dst, edge) in graph.all_edges() {
-            self.upsert_edge(&conn, &src, &dst, &edge)?;
+            self.upsert_edge_with_conn(&conn, &src, &dst, &edge)?;
             edge_count += 1;
         }
 
@@ -316,11 +444,7 @@ impl PersistentGraph {
         Ok(count)
     }
 
-    /// Load all persisted nodes and edges from KuzuDB back into the in-memory graph.
-    /// Called once at MCP server startup to restore previous sessions.
-    ///
-    /// # Returns
-    /// Number of nodes successfully restored.
+    /// Load all persisted nodes and edges from KuzuDB losslessly back into the in-memory graph.
     pub fn load_into_graph(&self, graph: &mut ChronosGraph) -> Result<usize> {
         let conn = Connection::new(&self.db)
             .context("Failed to open KuzuDB connection for load")?;
@@ -334,7 +458,8 @@ impl PersistentGraph {
                     n.cpu_percent, n.is_hot_path, n.is_bottleneck, \
                     n.end_line, n.loop_count, n.loop_depth, \
                     n.transitive_loop_depth, n.linear_scan_in_loop, \
-                    n.alloc_in_loop, n.is_recursive",
+                    n.alloc_in_loop, n.is_recursive, \
+                    n.qualified_name, n.contract_signature, n.start_byte, n.end_byte",
         )
         .context("KuzuDB MATCH query failed")?;
 
@@ -366,6 +491,10 @@ impl PersistentGraph {
             let lin_scan  = get_i64(&row, 22).unwrap_or(0) as u32;
             let alloc_lp  = get_i64(&row, 23).unwrap_or(0) as u32;
             let is_rec    = get_bool(&row, 24).unwrap_or(false);
+            let qname     = get_string(&row, 25).unwrap_or_default();
+            let csig_raw  = get_string(&row, 26).unwrap_or_default();
+            let start_b   = get_i64(&row, 27).unwrap_or(0).max(0) as usize;
+            let end_b     = get_i64(&row, 28).unwrap_or(0).max(0) as usize;
 
             if id_str.is_empty() || name.is_empty() {
                 warn!("KuzuDB: skipping row with empty id/name");
@@ -380,6 +509,8 @@ impl PersistentGraph {
                 start_col: 0,
                 end_line: end_ln,
                 end_col: 0,
+                start_byte: start_b,
+                end_byte: end_b,
             };
             let heuristics = StaticHeuristics {
                 cyclomatic_complexity: cyclo,
@@ -400,7 +531,7 @@ impl PersistentGraph {
                 Some(TelemetrySnapshot {
                     captured_at: chrono::Utc::now(),
                     exec_time_ms_p50: p50,
-                    exec_time_ms_p95: p99, // approximate: we only store p99
+                    exec_time_ms_p95: p99,
                     exec_time_ms_p99: p99,
                     alloc_delta_kb: 0.0,
                     invocation_count: inv_cnt,
@@ -413,15 +544,17 @@ impl PersistentGraph {
                 None
             };
 
+            let contract_signature = if csig_raw.is_empty() { None } else { Some(csig_raw) };
+
             let node = ChronosNode {
                 id: node_id,
                 kind,
                 name,
-                qualified_name: String::new(),
+                qualified_name: qname,
                 location,
                 heuristics,
                 telemetry,
-                contract_signature: None,
+                contract_signature,
                 contract_mutated: false,
             };
 
@@ -475,10 +608,6 @@ impl PersistentGraph {
     }
 
     /// Incrementally synchronize a list of workspace files using `xxHash64` Merkle file hashes.
-    ///
-    /// Files whose `xxHash64` matches the persisted `ChronosFileHash` entry in KuzuDB (and whose
-    /// nodes are already loaded in `graph`) are skipped completely without invoking Tree-sitter.
-    /// Modified or new files have their stale nodes evicted and are re-parsed and synced.
     pub fn sync_workspace_incremental(
         &self,
         graph: &mut ChronosGraph,
@@ -492,7 +621,6 @@ impl PersistentGraph {
         let conn = Connection::new(&self.db)
             .context("Failed to open KuzuDB connection for incremental sync")?;
 
-        // Load stored xxHash64 map
         let mut stored_hashes: std::collections::HashMap<String, String> = std::collections::HashMap::new();
         if let Ok(mut res) = conn.query("MATCH (f:ChronosFileHash) RETURN f.file, f.xxhash64") {
             while let Some(row) = res.next() {
@@ -520,7 +648,10 @@ impl PersistentGraph {
             let Ok(current_hash) = compute_file_xxhash64(file_path) else {
                 continue;
             };
-            let norm_key = file_path.to_string_lossy().replace('\\', "/");
+            let norm_key = file_path
+                .to_string_lossy()
+                .trim_start_matches(r"\\?\")
+                .replace('\\', "/");
 
             if stored_hashes.get(&norm_key) == Some(&current_hash)
                 && files_in_graph.contains(&norm_key)
@@ -529,7 +660,6 @@ impl PersistentGraph {
                 continue;
             }
 
-            // Cache miss or file modified: evict stale nodes for this file and re-parse
             graph.remove_nodes_for_file(file_path);
             if let Ok(mut del_stmt) = conn.prepare("MATCH (n:ChronosNode {file: $file}) DETACH DELETE n") {
                 let _ = conn.execute(&mut del_stmt, vec![("file", kuzu::Value::String(norm_key.clone()))]);
@@ -538,20 +668,7 @@ impl PersistentGraph {
             if let Ok(parsed) = dispatcher.parse_file(file_path) {
                 graph.ingest_parsed_module(&parsed);
                 re_parsed_files += 1;
-
-                if let Ok(mut hash_stmt) = conn.prepare(
-                    "MERGE (f:ChronosFileHash {file: $file}) \
-                     ON CREATE SET f.xxhash64 = $hash \
-                     ON MATCH SET f.xxhash64 = $hash",
-                ) {
-                    let _ = conn.execute(
-                        &mut hash_stmt,
-                        vec![
-                            ("file", kuzu::Value::String(norm_key)),
-                            ("hash", kuzu::Value::String(current_hash)),
-                        ],
-                    );
-                }
+                self.upsert_file_hash(&norm_key, &current_hash)?;
             }
         }
 

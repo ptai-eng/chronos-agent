@@ -16,7 +16,7 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Unique identifier for graph nodes — stable across re-parses.
 /// Derived from: file path + symbol name + kind (to handle same-name overloads).
@@ -77,13 +77,49 @@ pub enum EdgeKind {
 }
 
 /// Source location in the original file
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SourceLocation {
     pub file: PathBuf,
     pub start_line: usize,
     pub start_col: usize,
     pub end_line: usize,
     pub end_col: usize,
+    /// UTF-8 start byte offset in source file (0 when constructed synthetically)
+    #[serde(default)]
+    pub start_byte: usize,
+    /// UTF-8 end byte offset in source file (0 when constructed synthetically)
+    #[serde(default)]
+    pub end_byte: usize,
+}
+
+impl SourceLocation {
+    /// Construct a `SourceLocation` directly from a Tree-sitter CST node with exact byte spans.
+    pub fn from_ts_node(node: tree_sitter::Node<'_>, file_path: &Path) -> Self {
+        let start = node.start_position();
+        let end = node.end_position();
+        Self {
+            file: file_path.to_path_buf(),
+            start_line: start.row + 1,
+            start_col: start.column,
+            end_line: end.row + 1,
+            end_col: end.column,
+            start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
+        }
+    }
+
+    /// Construct a line-only `SourceLocation` (byte offsets default to 0).
+    pub fn lines(file: impl Into<PathBuf>, start_line: usize, end_line: usize) -> Self {
+        Self {
+            file: file.into(),
+            start_line,
+            start_col: 0,
+            end_line,
+            end_col: 0,
+            start_byte: 0,
+            end_byte: 0,
+        }
+    }
 }
 
 /// Static complexity heuristics — computed from AST alone, available immediately (cold-start).
@@ -139,6 +175,20 @@ impl StaticHeuristics {
             + (self.sloc as f32 / 10.0).min(20.0)
             + loop_penalty
         ).min(100.0);
+    }
+
+    /// Single source of truth for Efficiency diagnostic & blast-radius finding thresholds.
+    pub fn is_efficiency_hotspot(&self) -> bool {
+        self.linear_scan_in_loop > 0
+            || self.alloc_in_loop > 0
+            || self.transitive_loop_depth >= 3
+    }
+
+    /// Single source of truth for Simplification diagnostic & blast-radius finding thresholds.
+    pub fn is_simplification_candidate(&self) -> bool {
+        self.cyclomatic_complexity >= 5
+            || self.cognitive_load_score >= 25.0
+            || self.loop_depth >= 2
     }
 }
 
@@ -289,6 +339,8 @@ pub struct ChronosGraph {
     /// Pending cross-file / cross-boundary call references `(caller_id, callee_or_route, line)`
     /// retained so parse order between files or frontend/backend never drops edges.
     pending_call_refs: Vec<(NodeId, String, usize)>,
+    /// Memoized PageRank vector `(iterations, damping.to_bits(), ranks)` invalidated on graph mutations.
+    pagerank_cache: std::sync::RwLock<Option<(usize, u64, HashMap<NodeId, f64>)>>,
 }
 
 impl ChronosGraph {
@@ -301,6 +353,14 @@ impl ChronosGraph {
             resolved_call_sites: 0,
             unresolved_call_sites: 0,
             pending_call_refs: Vec::new(),
+            pagerank_cache: std::sync::RwLock::new(None),
+        }
+    }
+
+    #[inline]
+    fn invalidate_caches(&self) {
+        if let Ok(mut guard) = self.pagerank_cache.write() {
+            *guard = None;
         }
     }
 
@@ -333,12 +393,14 @@ impl ChronosGraph {
             }
             self.pending_call_refs
                 .retain(|(caller_id, _, _)| self.node_index.contains_key(caller_id));
+            self.invalidate_caches();
         }
         count
     }
 
     /// Add or replace a node in the graph.
     pub fn add_node(&mut self, node: ChronosNode) -> NodeIndex {
+        self.invalidate_caches();
         let id = node.id.clone();
         if let Some(&existing_idx) = self.node_index.get(&id) {
             // Replace existing node data (re-parse update)
@@ -365,6 +427,7 @@ impl ChronosGraph {
         let mut edges = self.graph.edges_directed(from_idx, petgraph::Direction::Outgoing);
         if !edges.any(|e| e.target() == to_idx && e.weight().kind == edge.kind) {
             self.graph.add_edge(from_idx, to_idx, edge);
+            self.invalidate_caches();
         }
         Ok(())
     }
@@ -587,6 +650,7 @@ impl ChronosGraph {
             }
         }
 
+        self.invalidate_caches();
         edges_added
     }
 
@@ -621,11 +685,17 @@ impl ChronosGraph {
         results
     }
 
-    /// Compute PageRank centrality across all CALLS edges in the graph.
-    ///
-    /// Inspired by NetworkX (`nx.pagerank`): identifies structural hub/bottleneck functions
-    /// that transitive callers depend on heavily, even before runtime telemetry is available.
+    /// Compute PageRank centrality across all CALLS edges in the graph (memoized per mutation).
     pub fn compute_pagerank(&self, iterations: usize, damping: f64) -> HashMap<NodeId, f64> {
+        let damping_bits = damping.to_bits();
+        if let Ok(guard) = self.pagerank_cache.read() {
+            if let Some((cached_iters, cached_damping, ref cached_ranks)) = *guard {
+                if cached_iters == iterations && cached_damping == damping_bits {
+                    return cached_ranks.clone();
+                }
+            }
+        }
+
         let n = self.graph.node_count();
         if n == 0 {
             return HashMap::new();
@@ -673,10 +743,87 @@ impl ChronosGraph {
             ranks = next_ranks;
         }
 
-        ranks
+        let computed: HashMap<NodeId, f64> = ranks
             .into_iter()
             .map(|(idx, score)| (self.graph[idx].id.clone(), score))
-            .collect()
+            .collect();
+
+        if let Ok(mut guard) = self.pagerank_cache.write() {
+            *guard = Some((iterations, damping_bits, computed.clone()));
+        }
+        computed
+    }
+
+    /// Unified symbol resolution supporting exact names, `qualified_name`, `Class/method` (`name_path`),
+    /// and suffix matching (`Class.method` / `mod::method`) with optional file disambiguation.
+    pub fn resolve_symbols(&self, query: &str, file_hint: Option<&str>) -> Vec<&ChronosNode> {
+        let q = query.trim();
+        if q.is_empty() {
+            return Vec::new();
+        }
+        let hint_norm = file_hint.map(|h| h.replace('\\', "/"));
+
+        // Support Serena-style slash paths (`ClassName/methodName` or `module/symbol`)
+        let (parent_filter, leaf_name) = if let Some((parent, leaf)) = q.rsplit_once('/') {
+            (Some(parent), leaf)
+        } else {
+            (None, q)
+        };
+
+        let mut scored: Vec<(u8, &ChronosNode)> = Vec::new();
+        for node in self.graph.node_weights() {
+            let file_norm = node.location.file.to_string_lossy().replace('\\', "/");
+            if let Some(ref hint) = hint_norm {
+                if !file_norm.ends_with(hint) && !file_norm.contains(hint) {
+                    continue;
+                }
+            }
+
+            let tier = if node.name == q || node.qualified_name == q {
+                0
+            } else if let Some(parent) = parent_filter {
+                let name_matches = node.name == leaf_name
+                    || node.name.ends_with(&format!(".{leaf_name}"))
+                    || node.name.ends_with(&format!("::{leaf_name}"));
+                let parent_matches = node.qualified_name.contains(parent)
+                    || file_norm.contains(parent)
+                    || node.name.starts_with(&format!("{parent}."))
+                    || node.name.starts_with(&format!("{parent}::"));
+                if name_matches && parent_matches {
+                    1
+                } else {
+                    continue;
+                }
+            } else if node.name.ends_with(&format!(".{q}")) || node.name.ends_with(&format!("::{q}")) {
+                2
+            } else {
+                continue;
+            };
+
+            let kind_penalty = if node.kind == NodeKind::File { 10 } else { 0 };
+            scored.push((tier + kind_penalty, node));
+        }
+
+        scored.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| a.1.location.file.cmp(&b.1.location.file))
+                .then_with(|| a.1.location.start_line.cmp(&b.1.location.start_line))
+        });
+
+        scored.into_iter().map(|(_, n)| n).collect()
+    }
+
+    /// Resolve the highest-priority single matching symbol (falling back to global search if
+    /// `file_hint` produced zero hits).
+    pub fn resolve_first_symbol(&self, query: &str, file_hint: Option<&str>) -> Option<&ChronosNode> {
+        let with_hint = self.resolve_symbols(query, file_hint);
+        if let Some(first) = with_hint.into_iter().next() {
+            return Some(first);
+        }
+        if file_hint.is_some() {
+            return self.resolve_symbols(query, None).into_iter().next();
+        }
+        None
     }
 
     /// Detect architectural communities (clusters) over the CALLS/CONTAINS graph
@@ -841,6 +988,7 @@ impl ChronosGraph {
     pub fn hydrate_node(&mut self, id: &NodeId, telemetry: TelemetrySnapshot) -> bool {
         if let Some(node) = self.get_node_mut(id) {
             node.hydrate(telemetry);
+            self.invalidate_caches();
             true
         } else {
             false
@@ -1157,16 +1305,9 @@ impl std::fmt::Display for GraphStatusReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn make_location(file: &str, line: usize) -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from(file),
-            start_line: line,
-            start_col: 0,
-            end_line: line + 10,
-            end_col: 1,
-        }
+        SourceLocation::lines(file, line, line + 10)
     }
 
     fn make_function_node(file: &str, name: &str) -> ChronosNode {

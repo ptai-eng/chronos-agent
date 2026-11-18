@@ -5,10 +5,9 @@
 
 use crate::protocol::CallToolResult;
 use crate::state::SharedState;
-use chronos_core::{ast::dispatcher::LanguageDispatcher, graph::query::GraphQueryEngine};
+use chronos_core::graph::query::GraphQueryEngine;
 use serde_json::Value;
 use std::path::PathBuf;
-use tracing::warn;
 
 pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> CallToolResult {
     let file_path = match params.as_ref()
@@ -20,82 +19,26 @@ pub async fn handle_analyze_file(state: SharedState, params: Option<Value>) -> C
         None => return CallToolResult::error("Missing required parameter: file_path"),
     };
 
-    let abs_path = {
-        let st = state.read().await;
-        let p = PathBuf::from(&file_path);
-        let joined = if p.is_absolute() { p } else { st.workspace_root.join(&p) };
-        // Security: canonicalize and ensure path stays within workspace
-        match joined.canonicalize() {
-            Ok(canonical) => {
-                if !canonical.starts_with(&st.workspace_root) {
-                    return CallToolResult::error(
-                        "Security: file path is outside the workspace root"
-                    );
-                }
-                canonical
-            }
-            Err(_) => joined, // file not yet created — will fail at exists() check below
-        }
+    let (idx_report, report, four_angles) = {
+        let mut st = state.write().await;
+        let idx_report = match st.session.index_file(&PathBuf::from(&file_path)).await {
+            Ok(r) => r,
+            Err(e) => return CallToolResult::error(e.to_string()),
+        };
+        let report = st.graph.status_report();
+        let four_angles = GraphQueryEngine::new(&st.graph).audit_file_four_angles(&file_path);
+        (idx_report, report, four_angles)
     };
 
-    if !abs_path.exists() {
-        return CallToolResult::error(format!("File not found: {}", abs_path.display()));
-    }
-
-    // Reject unsupported file types early
-    if !LanguageDispatcher::is_supported(&abs_path) {
-        return CallToolResult::error(format!(
-            "Unsupported file type: '{}'. Supported: .ts .tsx .js .py .rs",
-            abs_path.extension().and_then(|e| e.to_str()).unwrap_or("?")
-        ));
-    }
-
-    let mut dispatcher = match LanguageDispatcher::new() {
-        Ok(d) => d,
-        Err(e) => return CallToolResult::error(format!("Parser init: {}", e)),
-    };
-
-    let parsed = match dispatcher.parse_file(&abs_path) {
-        Ok(m) => m,
-        Err(e) => return CallToolResult::error(format!("Parse failed: {}", e)),
-    };
-
-    let fn_count = parsed.functions.len();
-    let class_count = parsed.classes.len();
-    let route_count = parsed.api_routes.len();
-    let test_count = parsed.test_cases.len();
-    let call_ref_count = parsed.call_refs.len();
-    let import_count = parsed.import_refs.len();
-    let unresolved_count = parsed.unresolved_call_sites;
-
-    let mut st = state.write().await;
-    st.graph.remove_nodes_for_file(&abs_path);
-    let (inserted, edges_added) = st.graph.ingest_parsed_module(&parsed);
-
-    if let Some(ref db) = st.db {
-        if let Ok(hash) = chronos_core::graph::persistent::compute_file_xxhash64(&abs_path) {
-            let norm = abs_path
-                .to_string_lossy()
-                .trim_start_matches(r"\\?\")
-                .replace('\\', "/");
-            let _ = db.upsert_file_hash(&norm, &hash);
-        }
-        if let Err(e) = db.sync_from_graph(&st.graph) {
-            warn!("KuzuDB sync failed: {}", e);
-        }
-    }
-
-    let broker = st.broker.clone();
-    let report = st.graph.status_report();
-    let four_angles = GraphQueryEngine::new(&st.graph).audit_file_four_angles(&file_path);
-
-    // Drop lock before await
-    drop(st);
-
-    // Index in contract broker for real-time contract watching
-    if let Err(e) = broker.index_file(&abs_path).await {
-        warn!("Contract broker indexing failed for {}: {}", abs_path.display(), e);
-    }
+    let fn_count = idx_report.functions;
+    let class_count = idx_report.classes;
+    let route_count = idx_report.api_routes;
+    let test_count = idx_report.test_cases;
+    let call_ref_count = idx_report.call_refs;
+    let import_count = idx_report.import_refs;
+    let unresolved_count = idx_report.unresolved_call_sites;
+    let inserted = idx_report.nodes_inserted;
+    let edges_added = idx_report.edges_added;
 
     let four_angle_section = if four_angles.is_empty() {
         "  - No Reuse/Efficiency/Simplification/Altitude warnings detected.".to_string()

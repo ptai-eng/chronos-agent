@@ -69,13 +69,7 @@ impl RustParser {
             path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
             name
         );
-        let location = SourceLocation {
-            file: path.to_path_buf(),
-            start_line: tree_node.start_position().row + 1,
-            start_col: tree_node.start_position().column,
-            end_line: tree_node.end_position().row + 1,
-            end_col: tree_node.end_position().column,
-        };
+        let location = SourceLocation::from_ts_node(tree_node, path);
         let fn_text = tree_node.utf8_text(src).unwrap_or("");
         let mut cyc = 1u32;
         for kw in &["if ", "else if", "for ", "while ", "loop ", "match ", "&&", "||", "?"] {

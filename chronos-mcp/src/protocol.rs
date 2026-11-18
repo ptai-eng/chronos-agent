@@ -104,6 +104,9 @@ pub struct CallToolResult {
     #[serde(rename = "isError")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
+    #[serde(rename = "_meta")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Value>,
 }
 
 impl CallToolResult {
@@ -111,6 +114,7 @@ impl CallToolResult {
         Self {
             content: vec![ContentItem { content_type: "text", text: text.into() }],
             is_error: None,
+            meta: None,
         }
     }
 
@@ -118,6 +122,12 @@ impl CallToolResult {
         Self {
             content: vec![ContentItem { content_type: "text", text: text.into() }],
             is_error: Some(true),
+            meta: None,
         }
+    }
+
+    pub fn with_meta(mut self, meta: Value) -> Self {
+        self.meta = Some(meta);
+        self
     }
 }
