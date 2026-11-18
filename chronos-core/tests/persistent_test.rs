@@ -72,14 +72,32 @@ fn make_tricky_node() -> ChronosNode {
 #[test]
 fn kuzu_open_creates_schema() {
     let dir = tempfile::tempdir().unwrap();
-    GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    GraphRepository::open(&db).unwrap();
 }
 
 #[test]
 fn kuzu_open_idempotent_second_open() {
     let dir = tempfile::tempdir().unwrap();
-    GraphRepository::open(dir.path()).unwrap();
-    GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    GraphRepository::open(&db).unwrap();
+    GraphRepository::open(&db).unwrap();
+}
+
+#[test]
+fn kuzu_auto_rebuilds_legacy_directory_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join(".chronos").join("graph.kuzu");
+    // Simulate a legacy v1.6.0 Kuzu directory cache on disk
+    std::fs::create_dir_all(&db).unwrap();
+    std::fs::write(db.join("stale.db"), b"legacy").unwrap();
+
+    let repo = GraphRepository::open(&db).unwrap();
+    let node = make_function_node("src/legacy.ts", "migratedFn");
+    repo.upsert_single_node(&node).unwrap();
+
+    let mut graph = ChronosGraph::new();
+    assert_eq!(repo.load_into_graph(&mut graph).unwrap(), 1);
 }
 
 // ─── Upsert & load round-trip ─────────────────────────────────────────────────
@@ -87,7 +105,8 @@ fn kuzu_open_idempotent_second_open() {
 #[test]
 fn kuzu_upsert_and_load_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    let repo = GraphRepository::open(&db).unwrap();
 
     let node = make_function_node("src/foo.ts", "fooFunc");
     repo.upsert_single_node(&node).unwrap();
@@ -113,7 +132,8 @@ fn kuzu_upsert_and_load_round_trip() {
 #[test]
 fn kuzu_upsert_multiple_nodes() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    let repo = GraphRepository::open(&db).unwrap();
 
     repo.upsert_single_node(&make_function_node("src/a.ts", "funcA")).unwrap();
     repo.upsert_single_node(&make_function_node("src/b.ts", "funcB")).unwrap();
@@ -129,14 +149,15 @@ fn kuzu_upsert_multiple_nodes() {
 #[test]
 fn kuzu_survives_restart() {
     let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("graph.kuzu");
 
     {
-        let repo = GraphRepository::open(dir.path()).unwrap();
+        let repo = GraphRepository::open(&db).unwrap();
         repo.upsert_single_node(&make_function_node("src/a.ts", "funcA")).unwrap();
     }
 
     {
-        let repo = GraphRepository::open(dir.path()).unwrap();
+        let repo = GraphRepository::open(&db).unwrap();
         let mut graph = ChronosGraph::new();
         let count = repo.load_into_graph(&mut graph).unwrap();
         assert_eq!(count, 1, "node must survive DB restart");
@@ -146,7 +167,8 @@ fn kuzu_survives_restart() {
 #[test]
 fn kuzu_upsert_updates_shifted_start_line_sloc_and_params_on_match() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    let repo = GraphRepository::open(&db).unwrap();
 
     let node = make_function_node("src/foo.ts", "fooFunc");
     repo.upsert_single_node(&node).unwrap();
@@ -183,7 +205,8 @@ fn kuzu_upsert_updates_shifted_start_line_sloc_and_params_on_match() {
 #[test]
 fn kuzu_upsert_handles_single_quote_in_name() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    let repo = GraphRepository::open(&db).unwrap();
 
     let node = make_tricky_node();
     repo.upsert_single_node(&node)
@@ -199,7 +222,8 @@ fn kuzu_upsert_handles_single_quote_in_name() {
 #[test]
 fn kuzu_sync_from_graph_bulk() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    let repo = GraphRepository::open(&db).unwrap();
 
     let mut in_graph = ChronosGraph::new();
     in_graph.add_node(make_function_node("src/x.ts", "funcX"));
@@ -216,7 +240,8 @@ fn kuzu_sync_from_graph_bulk() {
 #[test]
 fn kuzu_sync_file_delta_evicts_and_updates_single_file() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    let repo = GraphRepository::open(&db).unwrap();
 
     let mut graph = ChronosGraph::new();
     graph.add_node(make_function_node("src/a.ts", "staleFn"));
@@ -253,8 +278,9 @@ fn kuzu_persists_and_restores_edges_across_restart() {
     test_node.kind = NodeKind::TestCase;
     let test_id = test_node.id.clone();
 
+    let db = dir.path().join("graph.kuzu");
     {
-        let repo = GraphRepository::open(dir.path()).unwrap();
+        let repo = GraphRepository::open(&db).unwrap();
         let mut graph = ChronosGraph::new();
         graph.add_node(caller_node);
         graph.add_node(callee_node);
@@ -267,7 +293,7 @@ fn kuzu_persists_and_restores_edges_across_restart() {
     }
 
     {
-        let repo = GraphRepository::open(dir.path()).unwrap();
+        let repo = GraphRepository::open(&db).unwrap();
         let mut restored = ChronosGraph::new();
         let loaded_nodes = repo.load_into_graph(&mut restored).unwrap();
         assert_eq!(loaded_nodes, 3, "all 3 nodes must be restored");
@@ -288,7 +314,8 @@ fn kuzu_persists_and_restores_edges_across_restart() {
 #[test]
 fn kuzu_readonly_cypher_query_and_complexity_columns() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = GraphRepository::open(dir.path()).unwrap();
+    let db = dir.path().join("graph.kuzu");
+    let repo = GraphRepository::open(&db).unwrap();
 
     let mut graph = ChronosGraph::new();
     graph.add_node(make_function_node("src/hot.ts", "deleteUserSession"));

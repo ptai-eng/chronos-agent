@@ -11,7 +11,6 @@ version = "1.7.0"
 edition = "2021"
 authors = ["CHRONOS-AGENT Project"]
 license = "MIT"
-description = "5D Dynamic Knowledge Graph + Runtime Telemetry + Super-Mutant Testing + Multi-Agent Harness (12 MCP Tools)"
 
 [workspace.dependencies]
 # Serialization
@@ -56,11 +55,7 @@ ratatui = "0.28"
 
 # Crossterm for terminal backend
 crossterm = "0.28"
-crossbeam-channel = "0.5.12"
-kuzu = "0.9"
-
-# Process management
-shared_child = "1"
+kuzu = "0.11.3"
 
 # Hashing
 xxhash-rust = { version = "0.8", features = ["xxh64"] }

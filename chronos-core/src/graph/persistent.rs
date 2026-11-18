@@ -53,7 +53,15 @@ impl GraphRepository {
                         "Rebuilding incompatible KuzuDB cache at {:?}: {}",
                         clean_path, first_err
                     );
-                    let _ = std::fs::remove_dir_all(&clean_path);
+                    if clean_path.is_dir() {
+                        let _ = std::fs::remove_dir_all(&clean_path);
+                    } else {
+                        let _ = std::fs::remove_file(&clean_path);
+                    }
+                    let wal_path = std::path::PathBuf::from(format!("{}.wal", clean_path.display()));
+                    if wal_path.exists() {
+                        let _ = std::fs::remove_file(&wal_path);
+                    }
                     Database::new(&clean_path, SystemConfig::default()).map_err(|e| {
                         anyhow::anyhow!("KuzuDB rebuild error at {:?}: {}", clean_path, e)
                     })?
