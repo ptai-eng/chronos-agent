@@ -12,7 +12,7 @@
   <circle cx="24" cy="21" r="5.5" fill="#ff5f56"/>
   <circle cx="44" cy="21" r="5.5" fill="#ffbd2e"/>
   <circle cx="64" cy="21" r="5.5" fill="#27c93f"/>
-  <text x="560" y="25" fill="#9ca3b5" font-size="11" font-weight="500" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" text-anchor="middle">chronos-vscode — src/services/orderService.ts — CHRONOS 5D HUD v1.6.0 (12 MCP Tools)</text>
+  <text x="560" y="25" fill="#9ca3b5" font-size="11" font-weight="500" font-family="'Geist Mono', 'SF Mono', Consolas, monospace" text-anchor="middle">chronos-vscode — src/services/orderService.ts — CHRONOS 5D HUD v1.8.1 (14 MCP Tools)</text>
   <rect x="984" y="11" width="116" height="20" rx="3" fill="rgba(235,108,54,0.16)" stroke="#eb6c36" stroke-width="0.8"/>
   <text x="1042" y="24" fill="#eb6c36" font-size="9.5" font-weight="600" font-family="'Geist Mono', Consolas, monospace" text-anchor="middle">MCP CONNECTED</text>
 
@@ -54,7 +54,7 @@
   <text x="36" y="456" fill="#8b92a5" font-size="9" font-weight="600" font-family="'Geist Mono', Consolas, monospace" letter-spacing="0.12em">SANDBOX ISOLATION</text>
   <text x="36" y="476" fill="#d1d5db" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">node_modules -&gt; Junction Linked</text>
   <text x="36" y="494" fill="#d1d5db" font-size="9.5" font-family="'Geist Mono', Consolas, monospace">KuzuDB Sync  -&gt; 1,110 nodes / 4,109 edges</text>
-  <text x="36" y="512" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">_meta.provenance.untrusted = true</text>
+  <text x="36" y="512" fill="#8b92a5" font-size="9" font-family="'Geist Mono', Consolas, monospace">_meta.provenance.untrusted_content = true</text>
 
   <!-- Center Panel: Interactive Blast-Radius Dependency Topology -->
   <rect x="316" y="56" width="496" height="304" rx="6" fill="#161920" stroke="#262936" stroke-width="1"/>

@@ -1,6 +1,6 @@
 # CHRONOS-AGENT — Universal Multi-Agent & CLI Ecosystem Guide
 
-`chronos-mcp` speaks standard **MCP JSON-RPC 2.0 (`v2024-11-05`)** over `stdio`, `chronos init` auto-scaffolds native rules/skills/plugins/MCP configs from the 5D Knowledge Graph, and `chronos schema` exports strict tool schemas for **OpenAI Responses API**, **OpenAI Function Calling**, **Anthropic Claude API**, and **Google Gemini / Antigravity**.
+`chronos-mcp` speaks standard **MCP JSON-RPC 2.0 (`2025-11-25` / `2024-11-05`)** over `stdio`, `chronos init` auto-scaffolds native rules/skills/plugins/MCP configs from the 5D Knowledge Graph, and `chronos schema` exports strict tool schemas for **OpenAI Responses API**, **OpenAI Function Calling**, **Anthropic Claude API**, and **Google Gemini / Antigravity**.
 
 ---
 
@@ -9,7 +9,7 @@
 Instead of manually editing JSON/TOML files or writing static prompts, run `chronos init` at the root of any repository to parse the 5D Knowledge Graph and generate live, data-backed configurations for your AI coding CLI or IDE:
 
 ```bash
-# Scaffold ALL supported AI CLIs & IDEs at once (16 files):
+# Scaffold ALL 8 supported AI CLIs & IDEs at once (18 files, or 20 with --with-hooks):
 chronos init --client all
 
 # Or target a specific CLI / IDE ecosystem:

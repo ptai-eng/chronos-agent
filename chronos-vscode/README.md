@@ -1,12 +1,12 @@
 # CHRONOS Agent for Visual Studio Code
 
-**4D Living Code Intelligence Harness & Real-Time Blast-Radius Protection for Autonomous AI Agents**
+**5D Living Code Intelligence Harness & Real-Time Blast-Radius Protection for Autonomous AI Agents**
 
 ---
 
 ## ⚡ Features
 
-- **Continuous 4D Telemetry on Save:** Automatically parses TypeScript and JavaScript files into the local 4D Knowledge Graph upon file save (`onDidSaveTextDocument`).
+- **Continuous 5D Telemetry on Save:** Automatically parses 7 language families (TypeScript/JavaScript, Python, Rust, Go, C/C++, Java) into the local 5D Knowledge Graph upon file save (`onDidSaveTextDocument`).
 - **Interactive Blast-Radius Inspector:** Pinpoints downstream impacts, dependency call paths, and high-risk functions before code changes are committed.
 - **Hotspot & Bottleneck Analysis:** Queries runtime p95/p99 latency hotspots directly from the embedded graph engine.
 - **Zero-Friction MCP Integration:** Communicates with the local `chronos-mcp` binary via stdio JSON-RPC 2.0.

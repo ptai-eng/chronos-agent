@@ -4,9 +4,9 @@
 
 | Version | Supported | Security Audit Status |
 | :--- | :---: | :--- |
-| **`1.5.x`** | ✅ Yes | Active (4-Layer Defense-in-Depth + Codex Security Ready) |
-| **`1.4.x`** | ✅ Yes | Security fixes backported |
-| `< 1.4.0` | ❌ No | Upgrade to `>= 1.5.0` recommended |
+| **`1.8.x`** | ✅ Yes | Active (Workspace Jailing, `--readonly`, Rhai `50_000`-op Sandbox & Provenance) |
+| **`1.7.x`** | ✅ Yes | Security fixes backported |
+| `< 1.7.0` | ❌ No | Upgrade to `>= 1.8.1` recommended |
 
 ---
 

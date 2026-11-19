@@ -15,13 +15,13 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-2021%20Edition-EB6C36?style=flat-square&logo=rust&logoColor=white" alt="Rust Edition"></a>
   <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-157%2F157%20Passing-1A7F5A?style=flat-square" alt="Tests 157/157 Passing"></a>
-  <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-14%20Tools%20%28v2024--11--05%29-2E5AA8?style=flat-square" alt="MCP Protocol 14 Tools"></a>
+  <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-14%20Tools%20%282025--11--25%29-2E5AA8?style=flat-square" alt="MCP Protocol 14 Tools"></a>
   <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Local--First-B42318?style=flat-square" alt="Local-First Security"></a>
   <a href="https://glama.ai/mcp/servers/ptai-eng/chronos-agent"><img src="https://glama.ai/mcp/servers/ptai-eng/chronos-agent/badges/score.svg" alt="Glama MCP Score"></a>
 </p>
 
 <p align="center">
-  <img src="assets/chronos_demo.gif" alt="CHRONOS-AGENT v1.8.0 Terminal Demo: 1-Call Explore, Stage 2 Signature Gate & Edge-Verified Rename" width="96%"/>
+  <img src="assets/chronos_demo.gif" alt="CHRONOS-AGENT v1.8.1 Terminal Demo: 1-Call Explore, Stage 2 Signature Gate &amp; Edge-Verified Rename" width="96%"/>
 </p>
 
 ## 30-Second Quickstart
@@ -43,7 +43,7 @@ irm https://raw.githubusercontent.com/ptai-eng/chronos-agent/main/scripts/instal
 curl -fsSL https://raw.githubusercontent.com/ptai-eng/chronos-agent/main/scripts/install.sh | sh
 ```
 
-*(Other options: [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) via `cargo binstall --git https://github.com/ptai-eng/chronos-agent chronos-cli chronos-mcp`, [`packaging/homebrew/chronos.rb`](./packaging/homebrew/chronos.rb), or OCI container `docker run -i --rm -v "${PWD}:/workspace" ghcr.io/ptai-eng/chronos-agent:1.8.1` via the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.ptai-eng/chronos-agent).)*
+*(Other options: **Homebrew** via `brew install ptai-eng/tap/chronos` / [`packaging/homebrew/chronos.rb`](./packaging/homebrew/chronos.rb), [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) via `cargo binstall --git https://github.com/ptai-eng/chronos-agent chronos-cli chronos-mcp`, or OCI container `docker run -i --rm -v "${PWD}:/workspace" ghcr.io/ptai-eng/chronos-agent:1.8.1` via the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.ptai-eng/chronos-agent).)*
 
 Bootstrap configs for Codex, Antigravity, Claude Code, Cursor, OpenCode, Windsurf, Copilot, and Cline in any workspace:
 
@@ -90,7 +90,7 @@ Or drop `@ptai-eng/chronos-mcp` (or `chronos-mcp`) directly into any MCP client 
 
 Coding agents normally inspect repositories with sequential `grep` + line-range reads and apply raw string diffs without knowing who calls a function or whether `foo` also appears as an unrelated local variable.
 
-| Aspect | Built-in Agent Grep / Line Edits | Daemon LSP MCPs (e.g. Serena) | **CHRONOS-AGENT v1.8** |
+| Aspect | Built-in Agent Grep / Line Edits | Daemon LSP MCPs (e.g. Serena) | **CHRONOS-AGENT v1.8.1** |
 | :--- | :--- | :--- | :--- |
 | **Runtime Model** | Text regex per turn | Background language server daemon per language | **Single Rust binary (`<15ms` queries, zero daemon)** |
 | **Symbol Editing Safety** | Trusts stale line numbers / diff hunks | LSP offsets + text rewrite | **Fresh Tree-sitter re-parse on every write + 2-Stage Gate** (`syntax_error` & `blocked_requires_force` when signature changes on callers) |
@@ -159,7 +159,7 @@ Coding agents normally inspect repositories with sequential `grep` + line-range 
 
 ## 14 Canonical MCP Tools
 
-`chronos-mcp` speaks **MCP (v2024-11-05)** over stdio JSON-RPC 2.0, exposes **14 canonical tools** (plus compatibility aliases `chronos_replace_symbol_body`, `chronos_rename_symbol`, `chronos_safe_delete`), enforces `--readonly` guards, injects `_meta.contract_alerts`, and caps oversized replies cleanly via `max_answer_chars`:
+`chronos-mcp` speaks **MCP (2025-11-25 / 2024-11-05)** over stdio JSON-RPC 2.0, exposes **14 canonical tools** (plus compatibility aliases `chronos_replace_symbol_body`, `chronos_rename_symbol`, `chronos_safe_delete`), enforces `--readonly` guards, injects `_meta.contract_alerts`, and caps oversized replies cleanly via `max_answer_chars`:
 
 | # | Tool Name | Mode | Category | Description |
 | :---: | :--- | :---: | :--- | :--- |
@@ -234,6 +234,9 @@ chronos hydrate profile.cpuprofile --json
 chronos arch chronos-core/src
 chronos query "MATCH (n:ChronosNode) WHERE n.transitive_loop_depth >= 2 RETURN n.name, n.transitive_loop_depth LIMIT 10"
 chronos diff --staged --json --ci
+
+# 6. Opt-In Hybrid LSP Reference Hydration (v1.8.1)
+chronos lsp-hydrate src/billing.rs --symbol compute_tax --json
 ```
 
 ### Build from Source
