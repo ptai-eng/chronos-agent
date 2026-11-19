@@ -1,20 +1,20 @@
 class Chronos < Formula
   desc "Single-binary Rust MCP server & CLI for 5D Code Graph, AST editing, and blast-radius gating"
   homepage "https://github.com/ptai-eng/chronos-agent"
-  version "1.8.0"
+  version "1.8.1"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/ptai-eng/chronos-agent/releases/download/v#{version}/chronos-macos-arm64.tar.gz"
-      sha256 "85a69214353b348d5a3bf64a3545bc6e09b2d2c31196f4d086a5b3987ad95031"
+      sha256 "ec672853c5abe717e0cc57c0800d06723203999899ac59be5eb8d46f73e91343"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
       url "https://github.com/ptai-eng/chronos-agent/releases/download/v#{version}/chronos-linux-x64.tar.gz"
-      sha256 "0cc389a9d27f4d71efe97399e7df310c86b9965f5cea5d4317e770e7933ba60c"
+      sha256 "17d088ce7714f3f3080be919e2a61a25c1fbd2c59a3e4c7c2928544dd1b74e31"
     end
   end
 
