@@ -165,5 +165,5 @@ pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallTo
         }
     }
 
-    CallToolResult::text(serde_json::to_string_pretty(&output).unwrap_or_default())
+    CallToolResult::text(serde_json::to_string(&output).unwrap_or_default())
 }

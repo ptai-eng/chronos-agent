@@ -361,7 +361,8 @@ mod tests {
         .await
         .unwrap();
         assert_ne!(script_ok.is_error, Some(true));
-        assert!(script_ok.content[0].text.contains("\"script_result\": 1"));
+        let script_json: Value = serde_json::from_str(&script_ok.content[0].text).unwrap();
+        assert_eq!(script_json["script_result"], 1);
 
         let script_inject_blocked = McpToolRegistry::dispatch(
             state_rw,
