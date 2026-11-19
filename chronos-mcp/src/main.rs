@@ -16,16 +16,17 @@ use tracing_subscriber::FmtSubscriber;
 #[command(
     name = "chronos-mcp",
     version = env!("CARGO_PKG_VERSION"),
-    about = "CHRONOS-AGENT MCP Server — 4D Knowledge Graph for AI coding agents",
-    long_about = r#"CHRONOS MCP Server exposes 5 tools over the Model Context Protocol:
+    about = "CHRONOS-AGENT MCP Server — 5D Code Graph, AST Symbol Editing & Refactoring",
+    long_about = r#"CHRONOS MCP Server exposes 14 tools over the Model Context Protocol:
 
-  chronos_analyze_file    — Parse TypeScript/Python/Rust and insert into 4D graph
-  chronos_query_hotspots  — Find performance bottlenecks
-  chronos_blast_radius    — Analyze change impact
-  chronos_mutation_gate   — Run mutation testing gate (80%/90%)
-  chronos_contract_status — Drain Pre-Tool Execution Gate alerts
+  Exploration & Search : chronos_explore, chronos_search_graph, chronos_get_snippet,
+                         chronos_get_architecture, chronos_query_graph
+  Analysis & Risk      : chronos_analyze_file, chronos_blast_radius, chronos_query_hotspots,
+                         chronos_mutation_gate, chronos_contract_status, chronos_hydrate_telemetry
+  Scaffolding & Edits  : chronos_generate_agents_md, chronos_edit_symbol, chronos_refactor_symbol
 
 Changed source files are re-parsed automatically (disable with --no-watch).
+Pass --readonly to hide write tools and block source mutations.
 
 Compatible with: Antigravity, Cursor, Codex CLI, OpenCode, Claude Desktop,
                  Cline, Windsurf, Continue, Zed"#

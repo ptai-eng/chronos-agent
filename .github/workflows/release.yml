@@ -112,6 +112,11 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Generate SHA256SUMS.txt
+        run: |
+          cd artifacts
+          sha256sum chronos-* > SHA256SUMS.txt || true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

@@ -4,7 +4,26 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "CHRONOS CLI — Developer and Reviewer command-line tool"
+
+[package.metadata.binstall]
+bin-dir = "{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+pkg-url = "https://github.com/ptai-eng/chronos-agent/releases/download/v{ version }/chronos-windows-x64.zip"
+bin-dir = "{ bin }.exe"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-fmt = "tgz"
+pkg-url = "https://github.com/ptai-eng/chronos-agent/releases/download/v{ version }/chronos-linux-x64.tar.gz"
+bin-dir = "{ bin }"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-fmt = "tgz"
+pkg-url = "https://github.com/ptai-eng/chronos-agent/releases/download/v{ version }/chronos-macos-arm64.tar.gz"
+bin-dir = "{ bin }"
 
 [[bin]]
 name = "chronos"
