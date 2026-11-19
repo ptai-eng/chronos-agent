@@ -10,11 +10,14 @@
 
 <p align="center">
   <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.8.0"><img src="https://img.shields.io/badge/Version-1.8.0-111827?style=flat-square" alt="Version 1.8.0"></a>
+  <a href="https://www.npmjs.com/package/@ptai-eng/chronos-mcp"><img src="https://img.shields.io/npm/v/@ptai-eng/chronos-mcp?style=flat-square&color=CB3837&logo=npm&logoColor=white" alt="npm @ptai-eng/chronos-mcp"></a>
+  <a href="https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.ptai-eng/chronos-agent"><img src="https://img.shields.io/badge/MCP%20Registry-io.github.ptai--eng%2Fchronos--agent-0F766E?style=flat-square" alt="Official MCP Registry"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-2021%20Edition-EB6C36?style=flat-square&logo=rust&logoColor=white" alt="Rust Edition"></a>
   <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-147%2F147%20Passing-1A7F5A?style=flat-square" alt="Tests 147/147 Passing"></a>
   <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-14%20Tools%20%28v2024--11--05%29-2E5AA8?style=flat-square" alt="MCP Protocol 14 Tools"></a>
   <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Local--First-B42318?style=flat-square" alt="Local-First Security"></a>
+  <a href="https://glama.ai/mcp/servers/ptai-eng/chronos-agent"><img src="https://glama.ai/mcp/servers/ptai-eng/chronos-agent/badges/score.svg" alt="Glama MCP Score"></a>
 </p>
 
 <p align="center">
@@ -23,7 +26,12 @@
 
 ## 30-Second Quickstart
 
-Install prebuilt binaries (`chronos` CLI + `chronos-mcp` server) without compiling C++/Rust toolchains:
+**Zero-install via `npx` (requires Node.js 18+; auto-fetches your OS release binary):**
+```bash
+npx -y @ptai-eng/chronos-mcp --workspace .
+```
+
+**Or install prebuilt binaries (`chronos` CLI + `chronos-mcp` server) without Node.js, C++, or Rust:**
 
 **Windows (PowerShell):**
 ```powershell
@@ -35,7 +43,7 @@ irm https://raw.githubusercontent.com/ptai-eng/chronos-agent/main/scripts/instal
 curl -fsSL https://raw.githubusercontent.com/ptai-eng/chronos-agent/main/scripts/install.sh | sh
 ```
 
-*(Rust users with [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) can also install prebuilt release archives via `cargo binstall --git https://github.com/ptai-eng/chronos-agent chronos-cli chronos-mcp`.)*
+*(Other options: [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) via `cargo binstall --git https://github.com/ptai-eng/chronos-agent chronos-cli chronos-mcp`, or OCI container `docker run -i --rm -v "${PWD}:/workspace" ghcr.io/ptai-eng/chronos-agent:1.8.0` via the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.ptai-eng/chronos-agent).)*
 
 Bootstrap configs for Codex, Antigravity, Claude Code, Cursor, OpenCode, Windsurf, Copilot, and Cline in any workspace:
 
@@ -44,18 +52,24 @@ cd your-project
 chronos init --client all --with-hooks
 ```
 
-Or drop `chronos-mcp` directly into any MCP client config:
+Or drop `@ptai-eng/chronos-mcp` (or `chronos-mcp`) directly into any MCP client config:
 
 ```json
 {
   "mcpServers": {
     "chronos-agent": {
-      "command": "chronos-mcp",
-      "args": ["--workspace", "."]
+      "command": "npx",
+      "args": ["-y", "@ptai-eng/chronos-mcp", "--workspace", "."]
     }
   }
 }
 ```
+
+<p align="center">
+  <a href="https://glama.ai/mcp/servers/ptai-eng/chronos-agent">
+    <img width="380" height="200" src="https://glama.ai/mcp/servers/ptai-eng/chronos-agent/badges/card.svg" alt="CHRONOS-AGENT MCP server on Glama" />
+  </a>
+</p>
 
 ---
 
