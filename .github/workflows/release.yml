@@ -14,12 +14,12 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 50
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2022
             target: x86_64-pc-windows-msvc
             name: windows-x64
             archive_name: chronos-windows-x64.zip
@@ -44,7 +44,7 @@ jobs:
         run: cargo build --release --workspace --target ${{ matrix.target }}
 
       - name: Prepare Artifacts (Unix)
-        if: matrix.os != 'windows-latest'
+        if: runner.os != 'Windows'
         run: |
           mkdir -p release-binaries
           cp target/${{ matrix.target }}/release/chronos-mcp release-binaries/
@@ -52,7 +52,7 @@ jobs:
           tar -czvf ${{ matrix.archive_name }} -C release-binaries .
 
       - name: Prepare Artifacts (Windows)
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         run: |
           mkdir release-binaries
           copy target\${{ matrix.target }}\release\chronos-mcp.exe release-binaries\
