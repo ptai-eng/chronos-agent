@@ -41,7 +41,7 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
 
     if st.graph.status_report().total_nodes == 0 {
         return CallToolResult::text(
-            "⚠️ **4D Graph is empty.**\n\nCall `chronos_analyze_file` first.",
+            "⚠️ **5D Graph is empty.**\n\nCall `chronos_analyze_file` first.",
         );
     }
 
@@ -52,7 +52,7 @@ pub async fn handle_blast_radius(state: SharedState, params: Option<Value>) -> C
         Some(node) => node.id.clone(),
         None => {
             return CallToolResult::text(format!(
-                "⚠️ **Symbol `{}` not found in 4D graph.**\n\n\
+                "⚠️ **Symbol `{}` not found in 5D graph.**\n\n\
                  Make sure to call `chronos_analyze_file` on the file containing this symbol first.\n\
                  If you provided a file_path, verify it matches the analyzed file.",
                 symbol_name

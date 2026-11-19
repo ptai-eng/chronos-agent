@@ -22,7 +22,7 @@ pub async fn handle_query_hotspots(state: SharedState, params: Option<Value>) ->
 
     if report.total_nodes == 0 {
         return CallToolResult::text(
-            "⚠️ **4D Graph is empty.**\n\nCall `chronos_analyze_file` first to populate the graph.",
+            "⚠️ **5D Graph is empty.**\n\nCall `chronos_analyze_file` first to populate the graph.",
         );
     }
 

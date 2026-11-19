@@ -19,12 +19,12 @@ mod commands;
 #[command(
     name = "chronos",
     version = env!("CARGO_PKG_VERSION"),
-    about = "CHRONOS-AGENT CLI — 4D Knowledge Graph for AI coding agents",
+    about = "CHRONOS-AGENT CLI — 5D Code Graph for AI coding agents",
     long_about = r#"CHRONOS gives AI coding agents runtime sensation:
 
   chronos audit <file>   — Full mutation score + blast-radius analysis
   chronos glance <file>  — 30-second impact summary (Markdown)
-  chronos graph <file>   — Query 4D graph: hotspots, callers, tests
+  chronos graph <file>   — Query 5D graph: hotspots, callers, tests
   chronos mcp            — Print MCP server startup command (copy-paste)
 
 Designed for: Antigravity · Cursor · Codex · OpenCode · Claude · Cline · Windsurf · Continue · Zed"#
@@ -81,7 +81,7 @@ enum Commands {
         #[arg(short, long)]
         symbol: Option<String>,
     },
-    /// Query the 4D graph for hotspots, callers, complexity
+    /// Query the 5D Code Graph for hotspots, callers, complexity
     Graph {
         /// File(s) to analyze and insert into graph
         files: Vec<PathBuf>,
@@ -115,7 +115,7 @@ enum Commands {
         #[arg(long, default_value_t = 200)]
         max_rows: usize,
     },
-    /// BM25 + Regex + Complexity search across the 4D Knowledge Graph
+    /// BM25 + Regex + Complexity search across the 5D Code Graph
     Search {
         /// Natural-language or keyword query (splits camelCase & snake_case)
         #[arg(short, long)]
@@ -149,7 +149,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Hydrate the 4D Knowledge Graph from an offline profiler artifact (.cpuprofile, Speedscope, Folded Flamegraph, OTLP JSON)
+    /// Hydrate the 5D Code Graph from an offline profiler artifact (.cpuprofile, Speedscope, Folded Flamegraph, OTLP JSON)
     Hydrate {
         /// Path to the offline profile file
         profile: PathBuf,

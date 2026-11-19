@@ -79,6 +79,29 @@ const MAX_ANSWER_CHARS_PARAM: ParamSpec = ParamSpec {
     nullable_in_strict: true,
 };
 
+/// MCP `ToolAnnotations` behavioral metadata attached to every canonical tool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolAnnotationsSpec {
+    pub title: &'static str,
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
+}
+
+impl ToolAnnotationsSpec {
+    /// Read-only, deterministic query against local workspace/graph state.
+    pub const fn read_only(title: &'static str) -> Self {
+        Self {
+            title,
+            read_only_hint: true,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: false,
+        }
+    }
+}
+
 /// Canonical definition of a single CHRONOS tool.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolSpec {
@@ -86,10 +109,22 @@ pub struct ToolSpec {
     pub description: &'static str,
     /// True if tool never modifies files inside user source directories directly.
     pub readonly: bool,
+    pub annotations: ToolAnnotationsSpec,
     pub params: &'static [ParamSpec],
 }
 
 impl ToolSpec {
+    /// Render MCP `annotations` metadata JSON object.
+    pub fn mcp_annotations(&self) -> Value {
+        json!({
+            "title": self.annotations.title,
+            "readOnlyHint": self.annotations.read_only_hint,
+            "destructiveHint": self.annotations.destructive_hint,
+            "idempotentHint": self.annotations.idempotent_hint,
+            "openWorldHint": self.annotations.open_world_hint,
+        })
+    }
+
     /// Standard MCP `inputSchema` (`required` contains only mandatory arguments).
     pub fn to_mcp_schema(&self) -> Value {
         let mut props = Map::new();
@@ -801,86 +836,142 @@ const REFACTOR_SYMBOL_PARAMS: &[ParamSpec] = &[
 pub const CANONICAL_TOOLS: &[ToolSpec] = &[
     ToolSpec {
         name: "chronos_analyze_file",
-        description: "Parse a source file (.ts, .tsx, .js, .py, .rs, .go, .c, .cpp, .java) with CHRONOS's polyglot AST engine and insert all symbols, call edges, cross-language HTTP routes, test edges, and loop/complexity metrics into the 4D Knowledge Graph.",
+        description: "Parse a source file (.ts, .tsx, .js, .py, .rs, .go, .c, .cpp, .java) with CHRONOS's polyglot AST engine and insert all symbols, call edges, cross-language HTTP routes, test edges, and loop/complexity metrics into the 5D Code Graph.",
         readonly: true,
+        annotations: ToolAnnotationsSpec {
+            title: "Analyze File (AST + 5D Graph)",
+            read_only_hint: false,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: false,
+        },
         params: ANALYZE_FILE_PARAMS,
     },
     ToolSpec {
         name: "chronos_query_hotspots",
-        description: "Query the 4D Knowledge Graph for the top N performance bottlenecks and hot-path functions (using live telemetry or PageRank + O(N^2) loop fallback).",
+        description: "Query the 5D Code Graph for the top N performance bottlenecks and hot-path functions (using live telemetry or PageRank + O(N^2) loop fallback).",
         readonly: true,
+        annotations: ToolAnnotationsSpec::read_only("Query Performance Hotspots"),
         params: QUERY_HOTSPOTS_PARAMS,
     },
     ToolSpec {
         name: "chronos_blast_radius",
         description: "Analyze the blast-radius (change impact) of modifying a specific function or symbol. Returns a risk zone (SAFE/MEDIUM/HIGH/CRITICAL), PageRank centrality, Git temporal co-change partners, confidence interval, coverage completeness, and residual unknowns.",
         readonly: true,
+        annotations: ToolAnnotationsSpec::read_only("Analyze Symbol Blast Radius"),
         params: BLAST_RADIUS_PARAMS,
     },
     ToolSpec {
         name: "chronos_mutation_gate",
-        description: "Run targeted mutation testing on a specific file using CHRONOS's Mutation Arena. Generates mutants, selects covering tests via 4D graph, runs them in parallel sandboxes, and returns the mutation score.",
+        description: "Run targeted mutation testing on a specific file using CHRONOS's Mutation Arena. Generates mutants, selects covering tests via the 5D Code Graph, runs them in parallel sandboxes, and returns the mutation score.",
         readonly: true,
+        annotations: ToolAnnotationsSpec {
+            title: "Run Mutation Gate",
+            read_only_hint: false,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: false,
+        },
         params: MUTATION_GATE_PARAMS,
     },
     ToolSpec {
         name: "chronos_contract_status",
         description: "Drain the Semantic Contract Broker's Pre-Tool Execution Gate. Returns any pending contract violation alerts detected since the last call.",
         readonly: true,
+        annotations: ToolAnnotationsSpec {
+            title: "Drain Contract Alerts",
+            read_only_hint: true,
+            destructive_hint: false,
+            idempotent_hint: false,
+            open_world_hint: false,
+        },
         params: CONTRACT_STATUS_PARAMS,
     },
     ToolSpec {
         name: "chronos_query_graph",
-        description: "Execute a Read-Only Cypher query directly against the embedded KuzuDB 4D Knowledge Graph. Every ChronosNode has properties: id, name, qualified_name, kind, file, start_line, end_line, start_byte, end_byte, cognitive_load, cyclomatic, fan_in, fan_out, param_count, sloc, loop_count, loop_depth, transitive_loop_depth, linear_scan_in_loop, alloc_in_loop, is_recursive, is_hydrated, exec_time_p50, exec_time_p99, invocation_count, cpu_percent, is_hot_path, is_bottleneck. Relationship tables: CALLS, CONTAINS, TESTS, IMPORTS, CO_CHANGES_WITH.",
+        description: "Execute a Read-Only Cypher query directly against the embedded KuzuDB 5D Code Graph. Every ChronosNode has properties: id, name, qualified_name, kind, file, start_line, end_line, start_byte, end_byte, cognitive_load, cyclomatic, fan_in, fan_out, param_count, sloc, loop_count, loop_depth, transitive_loop_depth, linear_scan_in_loop, alloc_in_loop, is_recursive, is_hydrated, exec_time_p50, exec_time_p99, invocation_count, cpu_percent, is_hot_path, is_bottleneck. Relationship tables: CALLS, CONTAINS, TESTS, IMPORTS, CO_CHANGES_WITH.",
         readonly: true,
+        annotations: ToolAnnotationsSpec::read_only("Query 5D Graph (Read-Only Cypher)"),
         params: QUERY_GRAPH_PARAMS,
     },
     ToolSpec {
         name: "chronos_search_graph",
-        description: "Search the 4D Knowledge Graph using BM25 ranked identifier tokenization (splits camelCase/snake_case), regex pattern matching, degree filtering, and nested-loop complexity filtering.",
+        description: "Search the 5D Code Graph using BM25 ranked identifier tokenization (splits camelCase/snake_case), regex pattern matching, degree filtering, and nested-loop complexity filtering.",
         readonly: true,
+        annotations: ToolAnnotationsSpec::read_only("Search 5D Code Graph"),
         params: SEARCH_GRAPH_PARAMS,
     },
     ToolSpec {
         name: "chronos_get_snippet",
         description: "Read the verbatim source code (start_line..=end_line) of a function/class from disk along with its callers, callees, covering tests, PageRank, and AST complexity metrics.",
         readonly: true,
+        annotations: ToolAnnotationsSpec::read_only("Read Verbatim Symbol Snippet"),
         params: GET_SNIPPET_PARAMS,
     },
     ToolSpec {
         name: "chronos_get_architecture",
         description: "Get a high-level architecture overview: community clusters (Label Propagation + Cohesion score), language breakdown, entry points, top PageRank hubs, and hidden O(N^2) algorithmic hotspots.",
         readonly: true,
+        annotations: ToolAnnotationsSpec::read_only("Get Architecture Overview"),
         params: GET_ARCHITECTURE_PARAMS,
     },
     ToolSpec {
         name: "chronos_hydrate_telemetry",
         description: "Hydrate the 4th Dimension (runtime telemetry) of the ChronosGraph from an offline profiler artifact (V8 .cpuprofile JSON, Speedscope/py-spy JSON, Folded Stack Flamegraph text, or OpenTelemetry OTLP trace JSON).",
         readonly: true,
+        annotations: ToolAnnotationsSpec {
+            title: "Hydrate Runtime Telemetry",
+            read_only_hint: false,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: false,
+        },
         params: HYDRATE_TELEMETRY_PARAMS,
     },
     ToolSpec {
         name: "chronos_generate_agents_md",
-        description: "Synthesize live, data-driven context rules, skills, and MCP configs from the 5D Knowledge Graph (AGENTS.md, CLAUDE.md, GEMINI.md, .agents/skills/chronos-agent/SKILL.md, .cursor/rules/chronos-5d.mdc) for OpenAI Codex CLI, Google Antigravity, Claude Code, OpenCode, Cursor, Windsurf, Copilot, and Cline.",
+        description: "Synthesize live, data-driven context rules, skills, and MCP configs from the 5D Code Graph (AGENTS.md, CLAUDE.md, GEMINI.md, .agents/skills/chronos-agent/SKILL.md, .cursor/rules/chronos-5d.mdc) for OpenAI Codex CLI, Google Antigravity, Claude Code, OpenCode, Cursor, Windsurf, Copilot, and Cline.",
         readonly: true,
+        annotations: ToolAnnotationsSpec {
+            title: "Generate Agent Context & Rules",
+            read_only_hint: false,
+            destructive_hint: false,
+            idempotent_hint: true,
+            open_world_hint: false,
+        },
         params: GENERATE_AGENTS_MD_PARAMS,
     },
     ToolSpec {
         name: "chronos_explore",
         description: "1-Call Subagent Context Engine (<15ms). Answers code exploration questions in a single call by returning the top BM25/regex matching symbols, wildcard Class/* outlines, signature-only views (include_body=false), inline blast-radius, read-only Rhai 5D scripts, caller/callee chains, verification surfaces, and 4-angle review diagnostics.",
         readonly: true,
+        annotations: ToolAnnotationsSpec::read_only("Explore Codebase (1-Call Context)"),
         params: EXPLORE_PARAMS,
     },
     ToolSpec {
         name: "chronos_edit_symbol",
         description: "Perform surgical AST-bounded edits (replace_body, insert_before, insert_after) against a fresh disk parse with leading trivia deduplication, indentation/CRLF/BOM preservation, and a 2-stage Tree-sitter syntax + contract blast-radius gate (blocked_requires_force on breaking signature changes with callers unless force=true).",
         readonly: false,
+        annotations: ToolAnnotationsSpec {
+            title: "Edit Symbol (AST Gated)",
+            read_only_hint: false,
+            destructive_hint: true,
+            idempotent_hint: false,
+            open_world_hint: false,
+        },
         params: EDIT_SYMBOL_PARAMS,
     },
     ToolSpec {
         name: "chronos_refactor_symbol",
-        description: "Perform graph-edge-verified multi-file refactoring (preview_usages, rename, safe_delete). Separates verified CALLS/TESTS/import edits from ambiguous member-access/shadowed candidate sites, enforces multi-file syntax validation + atomic rollback, and guards public/entrypoint/trait-impl deletions.",
+        description: "Perform graph-edge-verified multi-file refactoring (preview_usages, rename, safe_delete). Separates verified CALLS/TESTS/import edits from ambiguous member-access/shadowed candidate sites, enforces multi-file syntax validation + atomic rollback, and guards public/entrypoint/interface-impl deletions.",
         readonly: false,
+        annotations: ToolAnnotationsSpec {
+            title: "Refactor Symbol (Edge-Verified)",
+            read_only_hint: false,
+            destructive_hint: true,
+            idempotent_hint: false,
+            open_world_hint: false,
+        },
         params: REFACTOR_SYMBOL_PARAMS,
     },
 ];
@@ -911,6 +1002,7 @@ impl ToolRegistry {
                     "name": t.name,
                     "description": t.description,
                     "inputSchema": t.to_mcp_schema(),
+                    "annotations": t.mcp_annotations(),
                 })
             })
             .collect()
@@ -1119,6 +1211,27 @@ mod tests {
         assert!(search["properties"].get("offset").is_some(), "BUG-04: offset must exist in strict schema");
         let agents_md = ToolRegistry::find("chronos_generate_agents_md").unwrap().to_strict_openai_schema();
         assert_eq!(agents_md["properties"]["output_path"]["type"], json!(["string", "null"]));
+
+        // v1.8.1 MCP annotations + 5D consistency checks
+        for t in mcp_tools {
+            let name = t["name"].as_str().unwrap();
+            let desc = t["description"].as_str().unwrap();
+            assert!(!desc.contains("4D"), "stale 4D reference in description for {name}");
+            let ann = t["annotations"].as_object().expect("annotations present on MCP tool");
+            assert!(ann.contains_key("title"));
+            assert!(ann.contains_key("readOnlyHint"));
+            assert!(ann.contains_key("destructiveHint"));
+            assert!(ann.contains_key("idempotentHint"));
+            assert!(ann.contains_key("openWorldHint"));
+        }
+        assert_eq!(
+            ToolRegistry::find("chronos_explore").unwrap().annotations.read_only_hint,
+            true
+        );
+        assert_eq!(
+            ToolRegistry::find("chronos_edit_symbol").unwrap().annotations.destructive_hint,
+            true
+        );
     }
 
     #[test]

@@ -80,6 +80,17 @@ pub struct ToolsCapability {
     pub list_changed: bool,
 }
 
+/// MCP Tool behavioral annotations (`readOnlyHint`, `destructiveHint`, etc.)
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    pub title: &'static str,
+    pub read_only_hint: bool,
+    pub destructive_hint: bool,
+    pub idempotent_hint: bool,
+    pub open_world_hint: bool,
+}
+
 /// MCP Tool definition (returned in tools/list)
 #[derive(Debug, Serialize, Clone)]
 pub struct McpTool {
@@ -87,6 +98,8 @@ pub struct McpTool {
     pub description: &'static str,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
 }
 
 /// MCP Tool call result content item

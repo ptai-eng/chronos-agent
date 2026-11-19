@@ -8,7 +8,7 @@
 //! - Applies universal `max_answer_chars` (default 24,000) UTF-8 safe response budgeting
 
 use crate::{
-    protocol::{CallToolResult, JsonRpcError, McpTool},
+    protocol::{CallToolResult, JsonRpcError, McpTool, ToolAnnotations},
     state::SharedState,
     tools,
 };
@@ -30,6 +30,13 @@ impl McpToolRegistry {
                 name: spec.name,
                 description: spec.description,
                 input_schema: spec.to_mcp_schema(),
+                annotations: Some(ToolAnnotations {
+                    title: spec.annotations.title,
+                    read_only_hint: spec.annotations.read_only_hint,
+                    destructive_hint: spec.annotations.destructive_hint,
+                    idempotent_hint: spec.annotations.idempotent_hint,
+                    open_world_hint: spec.annotations.open_world_hint,
+                }),
             })
             .collect()
     }
@@ -281,6 +288,7 @@ mod tests {
     async fn test_v18_14_tools_readonly_guards_and_explore_script() {
         assert_eq!(McpToolRegistry::list_tools(false).len(), 14);
         assert_eq!(McpToolRegistry::list_tools(true).len(), 12);
+        assert!(McpToolRegistry::list_tools(false).iter().all(|t| t.annotations.is_some()));
 
         let ws = TempWorkspace::new("v18_guards");
         let file = ws.0.join("svc.rs");
