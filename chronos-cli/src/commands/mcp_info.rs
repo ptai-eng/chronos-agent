@@ -127,18 +127,19 @@ pub fn run(client: String) -> Result<()> {
     }
 
     println!("─────────────────────────────────────────────────────────────────");
-    println!("12 Registered MCP Tools:");
+    println!("14 Registered MCP Tools:");
     println!("  • chronos_analyze_file        • chronos_query_hotspots");
     println!("  • chronos_blast_radius        • chronos_mutation_gate");
     println!("  • chronos_contract_status     • chronos_query_graph");
     println!("  • chronos_search_graph        • chronos_get_snippet");
     println!("  • chronos_get_architecture    • chronos_hydrate_telemetry");
     println!("  • chronos_generate_agents_md  • chronos_explore (1-Call Context)");
+    println!("  • chronos_edit_symbol         • chronos_refactor_symbol");
 
     Ok(())
 }
 
-/// Export all 12 CHRONOS tools from the canonical `chronos_core::registry::ToolRegistry`:
+/// Export all 14 CHRONOS tools from the canonical `chronos_core::registry::ToolRegistry`:
 /// - `openai` (OpenAI Chat Completions Function Calling `strict: true`)
 /// - `responses` (OpenAI Responses API `strict: true`)
 /// - `anthropic` / `claude` (Anthropic Messages API `tools` with `input_schema`)
@@ -157,24 +158,26 @@ mod tests {
     fn test_export_schema_openai_responses_anthropic_gemini_and_codex_toml() {
         let openai = export_schema("openai").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&openai).unwrap();
-        assert_eq!(parsed.as_array().unwrap().len(), 12);
+        assert_eq!(parsed.as_array().unwrap().len(), 14);
         assert_eq!(parsed[0]["type"], "function");
         assert_eq!(parsed[0]["function"]["strict"], true);
 
         let responses = export_schema("responses").unwrap();
         let resp_val: serde_json::Value = serde_json::from_str(&responses).unwrap();
-        assert_eq!(resp_val.as_array().unwrap().len(), 12);
+        assert_eq!(resp_val.as_array().unwrap().len(), 14);
         assert_eq!(resp_val[10]["name"], "chronos_generate_agents_md");
         assert_eq!(resp_val[11]["name"], "chronos_explore");
+        assert_eq!(resp_val[12]["name"], "chronos_edit_symbol");
+        assert_eq!(resp_val[13]["name"], "chronos_refactor_symbol");
 
         let anthropic = export_schema("anthropic").unwrap();
         let anth_val: serde_json::Value = serde_json::from_str(&anthropic).unwrap();
-        assert_eq!(anth_val.as_array().unwrap().len(), 12);
+        assert_eq!(anth_val.as_array().unwrap().len(), 14);
         assert!(anth_val[0]["input_schema"].is_object());
 
         let gemini = export_schema("gemini").unwrap();
         let gem_val: serde_json::Value = serde_json::from_str(&gemini).unwrap();
-        assert_eq!(gem_val[0]["functionDeclarations"].as_array().unwrap().len(), 12);
+        assert_eq!(gem_val[0]["functionDeclarations"].as_array().unwrap().len(), 14);
 
         let toml = export_schema("codex-toml").unwrap();
         assert!(toml.contains("[mcp_servers.chronos-agent]"));

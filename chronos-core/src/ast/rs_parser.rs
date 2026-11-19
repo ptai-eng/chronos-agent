@@ -63,12 +63,17 @@ impl RustParser {
         param_count: u32,
         _is_exported: bool, // reserved: schema has no visibility field yet
     ) -> ChronosNode {
-        let id = NodeId::new(&path.to_string_lossy(), name, &kind);
-        let qualified_name = format!(
-            "{}::{}",
-            path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
-            name
-        );
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let enclosing_impl = Self::find_enclosing_impl_type(tree_node, src);
+        let (id_symbol, qualified_name) = if let Some(ref impl_ty) = enclosing_impl {
+            (
+                format!("{impl_ty}::{name}"),
+                format!("{stem}::{impl_ty}::{name}"),
+            )
+        } else {
+            (name.to_string(), format!("{stem}::{name}"))
+        };
+        let id = NodeId::new(&path.to_string_lossy(), &id_symbol, &kind);
         let location = SourceLocation::from_ts_node(tree_node, path);
         let fn_text = tree_node.utf8_text(src).unwrap_or("");
         let mut cyc = 1u32;
@@ -94,6 +99,23 @@ impl RustParser {
         let mut node = ChronosNode::new(id, kind, name, qualified_name, location);
         node.heuristics = heuristics;
         node
+    }
+
+    fn find_enclosing_impl_type(mut node: tree_sitter::Node, src: &[u8]) -> Option<String> {
+        while let Some(parent) = node.parent() {
+            if parent.kind() == "impl_item" {
+                if let Some(ty_node) = parent.child_by_field_name("type") {
+                    if let Ok(raw) = ty_node.utf8_text(src) {
+                        let clean = raw.split('<').next().unwrap_or(raw).trim();
+                        if !clean.is_empty() {
+                            return Some(clean.to_string());
+                        }
+                    }
+                }
+            }
+            node = parent;
+        }
+        None
     }
 
     fn visit_node(
@@ -356,5 +378,34 @@ mod tests {
             .expect("parse");
 
         assert!(!module.test_cases.is_empty(), "should detect test functions");
+    }
+
+    #[test]
+    fn test_rust_impl_methods_preserve_distinct_node_ids_and_wildcard_resolution() {
+        let src = r#"
+pub struct Alpha;
+pub struct Beta;
+
+impl Alpha {
+    pub fn new() -> Self { Alpha }
+    pub fn execute(&self) -> i32 { 1 }
+}
+
+impl Beta {
+    pub fn new() -> Self { Beta }
+}
+"#;
+        let mut parser = RustParser::new().unwrap();
+        let parsed = parser.parse_str(src, Path::new("engine.rs")).unwrap();
+        let mut graph = crate::graph::schema::ChronosGraph::new();
+        graph.ingest_parsed_module(&parsed);
+
+        // Both Alpha::new and Beta::new must coexist without overwriting each other
+        let all_news = graph.resolve_symbols("new", None);
+        assert_eq!(all_news.len(), 2);
+
+        // Wildcard Alpha/* must return Alpha::new and Alpha::execute
+        let alpha_children = graph.resolve_symbols("Alpha/*", None);
+        assert_eq!(alpha_children.len(), 2);
     }
 }

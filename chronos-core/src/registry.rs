@@ -97,6 +97,9 @@ impl ToolSpec {
         for p in self.params {
             let mut obj = Map::new();
             obj.insert("type".to_string(), Value::String(p.json_type.to_string()));
+            if p.json_type == "array" {
+                obj.insert("items".to_string(), json!({ "type": "string" }));
+            }
             if let Some(desc) = p.description {
                 obj.insert("description".to_string(), Value::String(desc.to_string()));
             }
@@ -133,6 +136,9 @@ impl ToolSpec {
                 Value::String(p.json_type.to_string())
             };
             obj.insert("type".to_string(), ty);
+            if p.json_type == "array" {
+                obj.insert("items".to_string(), json!({ "type": "string" }));
+            }
             if let Some(desc) = p.description {
                 obj.insert("description".to_string(), Value::String(desc.to_string()));
             }
@@ -165,6 +171,9 @@ impl ToolSpec {
                 Value::String(p.json_type.to_string())
             };
             obj.insert("type".to_string(), ty);
+            if p.json_type == "array" {
+                obj.insert("items".to_string(), json!({ "type": "string" }));
+            }
             if let Some(desc) = p.description {
                 obj.insert("description".to_string(), Value::String(desc.to_string()));
             }
@@ -193,6 +202,9 @@ impl ToolSpec {
         for p in self.params {
             let mut obj = Map::new();
             obj.insert("type".to_string(), Value::String(p.json_type.to_string()));
+            if p.json_type == "array" {
+                obj.insert("items".to_string(), json!({ "type": "string" }));
+            }
             if p.nullable_in_strict {
                 obj.insert("nullable".to_string(), Value::Bool(true));
             }
@@ -220,6 +232,8 @@ impl ToolSpec {
 
 const HOTSPOT_FILTERS: &[&str] = &["bottlenecks", "hot_paths", "high_complexity", "all"];
 const DETAIL_MODES: &[&str] = &["summary", "complete"];
+const EDIT_OPERATIONS: &[&str] = &["replace_body", "insert_before", "insert_after"];
+const REFACTOR_ACTIONS: &[&str] = &["preview_usages", "rename", "safe_delete"];
 const AGENT_TARGETS: &[&str] = &[
     "codex",
     "antigravity",
@@ -586,11 +600,20 @@ const EXPLORE_PARAMS: &[ParamSpec] = &[
     ParamSpec {
         name: "query",
         json_type: "string",
-        description: Some("Natural-language question, symbol name, 'Class/method' name_path, or regex pattern to explore"),
+        description: Some("Natural-language question, symbol name, 'Class/method' or 'Class/*' wildcard name_path, or regex pattern to explore"),
         enum_values: None,
         default_val: None,
-        required_in_mcp: true,
-        nullable_in_strict: false,
+        required_in_mcp: false,
+        nullable_in_strict: true,
+    },
+    ParamSpec {
+        name: "queries",
+        json_type: "array",
+        description: Some("Optional batch list of symbol names or 'Class/*' paths to explore in a single round-trip"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: false,
+        nullable_in_strict: true,
     },
     ParamSpec {
         name: "file_filter",
@@ -604,11 +627,47 @@ const EXPLORE_PARAMS: &[ParamSpec] = &[
     ParamSpec {
         name: "max_symbols",
         json_type: "integer",
-        description: Some("Maximum number of symbol bundles to return (default: 3, ceiling: 10)"),
+        description: Some("Maximum number of symbol bundles to return (default: 3, ceiling: 20)"),
         enum_values: None,
         default_val: Some(DefaultVal::Int(3)),
         required_in_mcp: false,
         nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "include_body",
+        json_type: "boolean",
+        description: Some("When false, returns only signature + line/byte spans without full source body to save tokens (default: true)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Bool(true)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "depth",
+        json_type: "integer",
+        description: Some("Class/module outline expansion depth (default: 1; >1 expands child methods for matched classes)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Int(1)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "include_blast_radius",
+        json_type: "boolean",
+        description: Some("When true, attaches compact inline RiskZone + caller counts per explored symbol (default: false)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Bool(false)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "script",
+        json_type: "string",
+        description: Some("Optional bounded ReadOnly Rhai 5D graph query script (no write functions available in MCP profile)"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: false,
+        nullable_in_strict: true,
     },
     ParamSpec {
         name: "auto_index",
@@ -622,7 +681,123 @@ const EXPLORE_PARAMS: &[ParamSpec] = &[
     MAX_ANSWER_CHARS_PARAM,
 ];
 
-/// Single canonical ordered registry of all 12 CHRONOS MCP tools.
+const EDIT_SYMBOL_PARAMS: &[ParamSpec] = &[
+    ParamSpec {
+        name: "symbol",
+        json_type: "string",
+        description: Some("Target symbol name or 'Class/method' path to edit (resolved via fresh disk AST parse)"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: true,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "file",
+        json_type: "string",
+        description: Some("Relative or absolute path within workspace to the target source file"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: true,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "operation",
+        json_type: "string",
+        description: Some("Edit operation: replace_body | insert_before | insert_after"),
+        enum_values: Some(EDIT_OPERATIONS),
+        default_val: Some(DefaultVal::Str("replace_body")),
+        required_in_mcp: true,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "new_code",
+        json_type: "string",
+        description: Some("Replacement or inserted code block (indentation and CRLF/LF + BOM are auto-preserved)"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: true,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "dry_run",
+        json_type: "boolean",
+        description: Some("Validate syntax and contract impact without modifying disk (default: false)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Bool(false)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "force",
+        json_type: "boolean",
+        description: Some("Override Stage 2 contract blast-radius block when changing a signature with callers (default: false)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Bool(false)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
+    MAX_ANSWER_CHARS_PARAM,
+];
+
+const REFACTOR_SYMBOL_PARAMS: &[ParamSpec] = &[
+    ParamSpec {
+        name: "symbol",
+        json_type: "string",
+        description: Some("Target symbol name or 'Class/method' path to analyze, rename, or safely delete"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: true,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "action",
+        json_type: "string",
+        description: Some("Refactoring action: preview_usages | rename | safe_delete"),
+        enum_values: Some(REFACTOR_ACTIONS),
+        default_val: Some(DefaultVal::Str("preview_usages")),
+        required_in_mcp: true,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "new_name",
+        json_type: "string",
+        description: Some("New identifier name (required when action == 'rename')"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: false,
+        nullable_in_strict: true,
+    },
+    ParamSpec {
+        name: "file",
+        json_type: "string",
+        description: Some("Optional defining source file path for symbol disambiguation"),
+        enum_values: None,
+        default_val: None,
+        required_in_mcp: false,
+        nullable_in_strict: true,
+    },
+    ParamSpec {
+        name: "dry_run",
+        json_type: "boolean",
+        description: Some("Preview multi-file diff and candidate sites without writing disk (default: false)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Bool(false)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
+    ParamSpec {
+        name: "force",
+        json_type: "boolean",
+        description: Some("Override ambiguity/homonym or dependent guards when applying rename/safe_delete (default: false)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Bool(false)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
+    MAX_ANSWER_CHARS_PARAM,
+];
+
+/// Single canonical ordered registry of all 14 CHRONOS MCP tools.
 pub const CANONICAL_TOOLS: &[ToolSpec] = &[
     ToolSpec {
         name: "chronos_analyze_file",
@@ -692,9 +867,21 @@ pub const CANONICAL_TOOLS: &[ToolSpec] = &[
     },
     ToolSpec {
         name: "chronos_explore",
-        description: "1-Call Subagent Context Engine (<15ms). Answers code exploration questions in a single call by returning the top BM25/regex matching symbols, their verbatim source code (start_line..=end_line), caller/callee chains, covering tests, user-facing verification surfaces (ApiRoute, CliCommand, RootEntrypoint), and 4-angle code review diagnostics (Reuse, Efficiency, Simplification, Altitude).",
+        description: "1-Call Subagent Context Engine (<15ms). Answers code exploration questions in a single call by returning the top BM25/regex matching symbols, wildcard Class/* outlines, signature-only views (include_body=false), inline blast-radius, read-only Rhai 5D scripts, caller/callee chains, verification surfaces, and 4-angle review diagnostics.",
         readonly: true,
         params: EXPLORE_PARAMS,
+    },
+    ToolSpec {
+        name: "chronos_edit_symbol",
+        description: "Perform surgical AST-bounded edits (replace_body, insert_before, insert_after) against a fresh disk parse with leading trivia deduplication, indentation/CRLF/BOM preservation, and a 2-stage Tree-sitter syntax + contract blast-radius gate (blocked_requires_force on breaking signature changes with callers unless force=true).",
+        readonly: false,
+        params: EDIT_SYMBOL_PARAMS,
+    },
+    ToolSpec {
+        name: "chronos_refactor_symbol",
+        description: "Perform graph-edge-verified multi-file refactoring (preview_usages, rename, safe_delete). Separates verified CALLS/TESTS/import edits from ambiguous member-access/shadowed candidate sites, enforces multi-file syntax validation + atomic rollback, and guards public/entrypoint/trait-impl deletions.",
+        readonly: false,
+        params: REFACTOR_SYMBOL_PARAMS,
     },
 ];
 
@@ -894,13 +1081,17 @@ mod tests {
         let anth_tools = anth_json.as_array().unwrap();
         let gem_tools = gem_json[0]["functionDeclarations"].as_array().unwrap();
 
-        assert_eq!(mcp_tools.len(), 12);
-        assert_eq!(openai_tools.len(), 12);
-        assert_eq!(resp_tools.len(), 12);
-        assert_eq!(anth_tools.len(), 12);
-        assert_eq!(gem_tools.len(), 12);
+        assert_eq!(mcp_tools.len(), 14);
+        assert_eq!(openai_tools.len(), 14);
+        assert_eq!(resp_tools.len(), 14);
+        assert_eq!(anth_tools.len(), 14);
+        assert_eq!(gem_tools.len(), 14);
 
-        for i in 0..12 {
+        // Read-only filtering hides write tools (#13 & #14) cleanly
+        assert_eq!(ToolRegistry::specs(false).len(), 12);
+        assert_eq!(ToolRegistry::specs(true).len(), 14);
+
+        for i in 0..14 {
             let name = mcp_tools[i]["name"].as_str().unwrap();
             assert_eq!(openai_tools[i]["function"]["name"], name);
             assert_eq!(resp_tools[i]["name"], name);

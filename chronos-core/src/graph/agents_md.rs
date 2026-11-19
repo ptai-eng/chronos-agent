@@ -255,7 +255,7 @@ This skill connects **Google Antigravity (`agy`)**, **Claude Code**, **OpenAI Co
 
 - **Top PageRank Hubs:** {hubs_summary}
 
-## Mandatory 4-Step Verification Workflow (12 MCP Tools)
+## Mandatory 4-Step Verification Workflow (14 MCP Tools)
 
 1. **1-Call Subagent Discovery (`chronos_explore` — Zero Context Bloat):**
    - Call `chronos_explore` (`query`, `file_filter`, `max_symbols`) to get top BM25 symbols, verbatim source code (`start_line..=end_line`), caller/callee topology, user-facing `verification_surfaces`, and `four_angle_diagnostics` (`Reuse`, `Efficiency`, `Simplification`, `Altitude`) in a single `<15ms` call.

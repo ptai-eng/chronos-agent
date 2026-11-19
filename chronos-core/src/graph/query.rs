@@ -9,6 +9,8 @@
 //! - Verbatim source snippet extraction with callers/callees/tests (`get_code_snippet`)
 //! - Community-clustered architecture & O(N^2) hotspot overview (`get_architecture`)
 
+use crate::blast_radius::ImpactAnalyzer;
+use crate::contract::signature::extract_header_signature;
 use crate::graph::schema::{ArchCluster, ChronosGraph, ChronosNode, NodeId, NodeKind, StaticHeuristics};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -170,6 +172,12 @@ pub struct CodeSnippetResult {
     pub file: String,
     pub start_line: usize,
     pub end_line: usize,
+    #[serde(default)]
+    pub start_byte: usize,
+    #[serde(default)]
+    pub end_byte: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
     pub source_code: String,
     pub pagerank_score: f64,
     pub heuristics: StaticHeuristics,
@@ -221,6 +229,54 @@ pub struct FourAngleDiagnostic {
     pub recommendation: String,
 }
 
+/// Compact inline blast-radius summary attached to `chronos_explore` bundles when `include_blast_radius: true`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExploreBlastSummary {
+    pub risk_zone: String,
+    pub impact_score: f32,
+    pub direct_callers_count: usize,
+    pub transitive_callers_count: usize,
+    pub affected_routes: Vec<String>,
+}
+
+/// Progressive options controlling `chronos_explore` token budget, depth, and batch queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExploreOptions {
+    #[serde(default)]
+    pub queries: Vec<String>,
+    #[serde(default)]
+    pub file_filter: Option<String>,
+    #[serde(default)]
+    pub max_symbols: usize,
+    #[serde(default = "default_explore_true")]
+    pub include_body: bool,
+    #[serde(default = "default_explore_depth")]
+    pub depth: usize,
+    #[serde(default)]
+    pub include_blast_radius: bool,
+}
+
+fn default_explore_true() -> bool {
+    true
+}
+
+fn default_explore_depth() -> usize {
+    1
+}
+
+impl Default for ExploreOptions {
+    fn default() -> Self {
+        Self {
+            queries: Vec::new(),
+            file_filter: None,
+            max_symbols: 3,
+            include_body: true,
+            depth: 1,
+            include_blast_radius: false,
+        }
+    }
+}
+
 /// Complete context bundle for a single symbol returned by `chronos_explore`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExploreSymbolBundle {
@@ -228,6 +284,10 @@ pub struct ExploreSymbolBundle {
     pub snippet: CodeSnippetResult,
     pub verification_surfaces: Vec<VerificationSurface>,
     pub four_angle_diagnostics: Vec<FourAngleDiagnostic>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blast_radius: Option<ExploreBlastSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children_outline: Vec<NodeSummary>,
 }
 
 /// 1-Call Subagent Context (`chronos_explore`) combining BM25 search, verbatim source code,
@@ -564,25 +624,61 @@ impl<'g> GraphQueryEngine<'g> {
         symbol_name: &str,
         file_filter: Option<&str>,
     ) -> Option<CodeSnippetResult> {
-        let matched = self.graph.resolve_first_symbol(symbol_name, file_filter)?;
+        self.get_code_snippet_with_options(symbol_name, file_filter, true)
+    }
 
+    /// Retrieve source snippet or progressive signature-only outline (`include_body = false`)
+    /// preserving exact byte/line spans for subsequent `chronos_edit_symbol` calls.
+    pub fn get_code_snippet_with_options(
+        &self,
+        symbol_name: &str,
+        file_filter: Option<&str>,
+        include_body: bool,
+    ) -> Option<CodeSnippetResult> {
+        let matched = self.graph.resolve_first_symbol(symbol_name, file_filter)?;
+        self.build_snippet_for_node(matched, include_body)
+    }
+
+    fn build_snippet_for_node(
+        &self,
+        matched: &ChronosNode,
+        include_body: bool,
+    ) -> Option<CodeSnippetResult> {
         let pagerank = self.graph.compute_pagerank(15, 0.85);
         let pr = pagerank.get(&matched.id).copied().unwrap_or(0.0);
 
-        let source_code = if let Ok(content) = std::fs::read_to_string(&matched.location.file) {
-            let lines: Vec<&str> = content.lines().collect();
-            let start = matched.location.start_line.saturating_sub(1);
-            let end = matched.location.end_line.min(lines.len()).max(start + 1);
-            lines[start..end]
-                .iter()
-                .enumerate()
-                .map(|(idx, line)| format!("{:>4} | {}", start + idx + 1, line))
-                .collect::<Vec<_>>()
-                .join("\n")
+        let disk_content = std::fs::read_to_string(&matched.location.file).ok();
+        let signature = disk_content
+            .as_deref()
+            .map(|c| extract_header_signature(matched, c))
+            .or_else(|| matched.contract_signature.clone());
+
+        let source_code = if include_body {
+            if let Some(ref content) = disk_content {
+                let lines: Vec<&str> = content.lines().collect();
+                let start = matched.location.start_line.saturating_sub(1);
+                let end = matched.location.end_line.min(lines.len()).max(start + 1);
+                lines[start..end]
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, line)| format!("{:>4} | {}", start + idx + 1, line))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            } else {
+                format!(
+                    "// Source file not readable on disk: {}",
+                    matched.location.file.display()
+                )
+            }
         } else {
+            let sig_line = signature.as_deref().unwrap_or(&matched.name);
             format!(
-                "// Source file not readable on disk: {}",
-                matched.location.file.display()
+                "// [signature outline] {} (lines {}..={}, bytes {}..{})",
+                sig_line,
+                matched.location.start_line,
+                matched.location.end_line,
+                matched.location.start_byte,
+                matched.location.end_byte
             )
         };
 
@@ -613,6 +709,9 @@ impl<'g> GraphQueryEngine<'g> {
             file: matched.location.file.to_string_lossy().replace('\\', "/"),
             start_line: matched.location.start_line,
             end_line: matched.location.end_line,
+            start_byte: matched.location.start_byte,
+            end_byte: matched.location.end_byte,
+            signature,
             source_code,
             pagerank_score: pr,
             heuristics: matched.heuristics.clone(),
@@ -1123,31 +1222,142 @@ impl<'g> GraphQueryEngine<'g> {
         file_filter: Option<&str>,
         max_symbols: usize,
     ) -> ExploreResponse {
-        let cap = if max_symbols == 0 {
+        self.explore_graph_with_options(
+            query,
+            &ExploreOptions {
+                queries: Vec::new(),
+                file_filter: file_filter.map(|s| s.to_string()),
+                max_symbols,
+                include_body: true,
+                depth: 1,
+                include_blast_radius: false,
+            },
+        )
+    }
+
+    /// Progressive multi-query `chronos_explore` supporting `Parent/*` wildcard outlines,
+    /// `include_body: false` signature-only slices, `depth > 1` class child expansion,
+    /// batch `queries[]`, and inline `include_blast_radius`.
+    pub fn explore_graph_with_options(&self, query: &str, opts: &ExploreOptions) -> ExploreResponse {
+        let cap = if opts.max_symbols == 0 {
             3
         } else {
-            max_symbols.min(10)
+            opts.max_symbols.min(20)
         };
 
-        let mut search_res = self.search_graph(&GraphSearchRequest {
-            query: if query.trim().is_empty() {
-                None
-            } else {
-                Some(query.to_string())
-            },
-            file_pattern: file_filter.map(|s| s.to_string()),
-            limit: cap * 2,
-            ..Default::default()
-        });
+        let mut raw_queries: Vec<String> = Vec::new();
+        if !query.trim().is_empty() {
+            raw_queries.push(query.trim().to_string());
+        }
+        for q in &opts.queries {
+            let trimmed = q.trim();
+            if !trimmed.is_empty() && !raw_queries.iter().any(|existing| existing == trimmed) {
+                raw_queries.push(trimmed.to_string());
+            }
+        }
+        if raw_queries.is_empty() {
+            raw_queries.push(String::new());
+        }
 
-        // Fallback if query is a regex/pattern that didn't hit BM25 token match
-        if search_res.results.is_empty() && !query.trim().is_empty() {
-            search_res = self.search_graph(&GraphSearchRequest {
-                name_pattern: Some(query.to_string()),
-                file_pattern: file_filter.map(|s| s.to_string()),
+        let pagerank = self.graph.compute_pagerank(15, 0.85);
+        let impact_analyzer = ImpactAnalyzer::new(self.graph);
+
+        let mut total_matches = 0usize;
+        let mut selected: Vec<(f32, &ChronosNode)> = Vec::new();
+        let mut seen_ids = std::collections::HashSet::new();
+
+        for q in &raw_queries {
+            // 1. Direct/wildcard name_path resolution (`ClassName/*`, `ClassName/method`)
+            if q.contains('/') || q.ends_with("/*") {
+                let direct_hits = self
+                    .graph
+                    .resolve_symbols(q, opts.file_filter.as_deref());
+                total_matches += direct_hits.len();
+                for node in direct_hits {
+                    if node.kind == NodeKind::File || !seen_ids.insert(node.id.clone()) {
+                        continue;
+                    }
+                    let pr = pagerank.get(&node.id).copied().unwrap_or(0.0);
+                    selected.push(((100.0 + pr * 25.0) as f32, node));
+                    if selected.len() >= cap {
+                        break;
+                    }
+                }
+                if selected.len() >= cap {
+                    break;
+                }
+                continue;
+            }
+
+            // 2. Standard BM25 + name_pattern fallback
+            let mut search_res = self.search_graph(&GraphSearchRequest {
+                query: if q.is_empty() {
+                    None
+                } else {
+                    Some(q.clone())
+                },
+                file_pattern: opts.file_filter.clone(),
                 limit: cap * 2,
                 ..Default::default()
             });
+
+            if search_res.results.is_empty() && !q.is_empty() {
+                search_res = self.search_graph(&GraphSearchRequest {
+                    name_pattern: Some(q.clone()),
+                    file_pattern: opts.file_filter.clone(),
+                    limit: cap * 2,
+                    ..Default::default()
+                });
+            }
+
+            total_matches += search_res.total;
+
+            for hit in search_res.results.iter().filter(|m| m.node.kind != "File") {
+                if let Some(node) = self
+                    .graph
+                    .resolve_first_symbol(&hit.node.name, Some(&hit.node.file))
+                {
+                    if seen_ids.insert(node.id.clone()) {
+                        selected.push((hit.score, node));
+                        if selected.len() >= cap {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // If depth > 1 and a Class node was selected, expand its immediate children (`Class/*`)
+            if opts.depth > 1 && selected.len() < cap {
+                let class_names: Vec<(String, String)> = selected
+                    .iter()
+                    .filter(|(_, n)| n.kind == NodeKind::Class)
+                    .map(|(_, n)| {
+                        (
+                            n.name.clone(),
+                            n.location.file.to_string_lossy().replace('\\', "/"),
+                        )
+                    })
+                    .collect();
+                for (cname, cfile) in class_names {
+                    let children = self.graph.resolve_symbols(&format!("{cname}/*"), Some(&cfile));
+                    for child in children {
+                        if seen_ids.insert(child.id.clone()) {
+                            let pr = pagerank.get(&child.id).copied().unwrap_or(0.0);
+                            selected.push(((50.0 + pr * 25.0) as f32, child));
+                            if selected.len() >= cap {
+                                break;
+                            }
+                        }
+                    }
+                    if selected.len() >= cap {
+                        break;
+                    }
+                }
+            }
+
+            if selected.len() >= cap {
+                break;
+            }
         }
 
         let mut bundles = Vec::new();
@@ -1155,26 +1365,10 @@ impl<'g> GraphQueryEngine<'g> {
         let mut seen_surfaces = std::collections::HashSet::new();
         let mut all_diagnostics = Vec::new();
 
-        for hit in search_res
-            .results
-            .iter()
-            .filter(|m| m.node.kind != "File")
-            .take(cap)
-        {
-            if let Some(snippet) = self.get_code_snippet(&hit.node.name, Some(&hit.node.file)) {
-                let node_id = self
-                    .graph
-                    .resolve_first_symbol(&hit.node.name, Some(&hit.node.file))
-                    .map(|n| n.id.clone());
-
-                let (surfaces, diags) = if let Some(ref id) = node_id {
-                    (
-                        self.trace_verification_surfaces(id, 5),
-                        self.audit_four_angles(id),
-                    )
-                } else {
-                    (Vec::new(), Vec::new())
-                };
+        for (score, node) in selected.into_iter().take(cap) {
+            if let Some(snippet) = self.build_snippet_for_node(node, opts.include_body) {
+                let surfaces = self.trace_verification_surfaces(&node.id, 5);
+                let diags = self.audit_four_angles(&node.id);
 
                 for s in &surfaces {
                     let key = format!("{}:{}:{}", s.surface_kind, s.file, s.name);
@@ -1184,35 +1378,64 @@ impl<'g> GraphQueryEngine<'g> {
                 }
                 all_diagnostics.extend(diags.clone());
 
+                let blast_radius = if opts.include_blast_radius {
+                    let report = impact_analyzer.analyze(&node.id, false);
+                    Some(ExploreBlastSummary {
+                        risk_zone: report.overall_risk.label().to_string(),
+                        impact_score: report.impact_score,
+                        direct_callers_count: report.direct_callers_count,
+                        transitive_callers_count: report.transitive_callers_count,
+                        affected_routes: report.affected_routes,
+                    })
+                } else {
+                    None
+                };
+
+                let children_outline = if node.kind == NodeKind::Class && opts.depth > 1 {
+                    let file_str = node.location.file.to_string_lossy().replace('\\', "/");
+                    self.graph
+                        .resolve_symbols(&format!("{}/*", node.name), Some(&file_str))
+                        .into_iter()
+                        .filter(|c| c.id != node.id)
+                        .map(NodeSummary::from_node)
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+
                 bundles.push(ExploreSymbolBundle {
-                    score: hit.score,
+                    score,
                     snippet,
                     verification_surfaces: surfaces,
                     four_angle_diagnostics: diags,
+                    blast_radius,
+                    children_outline,
                 });
             }
         }
 
+        let display_query = raw_queries.join(", ");
         let summary = if bundles.is_empty() {
             format!(
                 "No symbols matched query '{}'. Try broader keywords or call chronos_get_architecture.",
-                query
+                display_query
             )
         } else {
             format!(
-                "Explored {} symbol(s) for '{}' (out of {} matches) with {} verification surface(s) and {} 4-angle review diagnostic(s).",
+                "Explored {} symbol(s) for '{}' (out of {} matches, include_body={}) with {} verification surface(s) and {} 4-angle review diagnostic(s).",
                 bundles.len(),
-                query,
-                search_res.total,
+                display_query,
+                total_matches,
+                opts.include_body,
                 all_surfaces.len(),
                 all_diagnostics.len()
             )
         };
 
         ExploreResponse {
-            query: query.to_string(),
+            query: display_query,
             symbols_returned: bundles.len(),
-            total_matches: search_res.total,
+            total_matches,
             summary,
             bundles,
             verification_surfaces: all_surfaces,
@@ -1404,5 +1627,91 @@ mod tests {
         assert_eq!(arch.total_nodes, 2);
         assert_eq!(arch.algorithmic_hotspots.len(), 1);
         assert!(!arch.clusters.is_empty());
+    }
+
+    #[test]
+    fn test_wildcard_name_path_outline_without_body() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("calculator.py");
+        std::fs::write(
+            &file,
+            "class Calculator:\n    def add(self, a: int, b: int) -> int:\n        return a + b\n\n    def subtract(self, a: int, b: int) -> int:\n        return a - b\n",
+        )
+        .unwrap();
+
+        let mut graph = ChronosGraph::new();
+        let mut dispatcher = crate::ast::LanguageDispatcher::new().unwrap();
+        let parsed = dispatcher.parse_file(&file).unwrap();
+        graph.ingest_parsed_module(&parsed);
+
+        let qe = GraphQueryEngine::new(&graph);
+        let res = qe.explore_graph_with_options(
+            "Calculator/*",
+            &ExploreOptions {
+                include_body: false,
+                max_symbols: 10,
+                depth: 1,
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(res.symbols_returned, 2);
+        let names: Vec<&str> = res.bundles.iter().map(|b| b.snippet.name.as_str()).collect();
+        assert!(names.contains(&"Calculator.add"));
+        assert!(names.contains(&"Calculator.subtract"));
+        for b in &res.bundles {
+            assert!(
+                b.snippet.source_code.contains("[signature outline]"),
+                "include_body=false must omit body and return signature outline"
+            );
+            assert!(!b.snippet.source_code.contains("return a"));
+        }
+    }
+
+    #[test]
+    fn test_multi_query_explore_with_inline_blast_radius() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("ops.rs");
+        std::fs::write(
+            &file,
+            "pub fn alpha(x: i32) -> i32 { x + 1 }\npub fn beta(y: i32) -> i32 { alpha(y) * 2 }\npub fn gamma(z: i32) -> i32 { z - 1 }\n",
+        )
+        .unwrap();
+
+        let mut graph = ChronosGraph::new();
+        let mut dispatcher = crate::ast::LanguageDispatcher::new().unwrap();
+        let parsed = dispatcher.parse_file(&file).unwrap();
+        graph.ingest_parsed_module(&parsed);
+        graph.resolve_pending_calls_and_routes();
+
+        let qe = GraphQueryEngine::new(&graph);
+        let res = qe.explore_graph_with_options(
+            "alpha",
+            &ExploreOptions {
+                queries: vec!["gamma".to_string()],
+                include_body: true,
+                max_symbols: 5,
+                depth: 1,
+                include_blast_radius: true,
+                ..Default::default()
+            },
+        );
+
+        assert!(res.symbols_returned >= 2);
+        let alpha_bundle = res
+            .bundles
+            .iter()
+            .find(|b| b.snippet.name == "alpha")
+            .expect("Expected alpha bundle");
+        let blast = alpha_bundle
+            .blast_radius
+            .as_ref()
+            .expect("include_blast_radius=true must populate blast_radius");
+        assert_eq!(blast.direct_callers_count, 1);
+
+        assert!(
+            res.bundles.iter().any(|b| b.snippet.name == "gamma"),
+            "Batch query 'gamma' must also be explored in one round-trip"
+        );
     }
 }

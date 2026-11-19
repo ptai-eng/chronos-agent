@@ -755,7 +755,7 @@ impl ChronosGraph {
     }
 
     /// Unified symbol resolution supporting exact names, `qualified_name`, `Class/method` (`name_path`),
-    /// and suffix matching (`Class.method` / `mod::method`) with optional file disambiguation.
+    /// wildcard `Class/*`, and suffix matching (`Class.method` / `mod::method`) with optional file disambiguation.
     pub fn resolve_symbols(&self, query: &str, file_hint: Option<&str>) -> Vec<&ChronosNode> {
         let q = query.trim();
         if q.is_empty() {
@@ -763,12 +763,42 @@ impl ChronosGraph {
         }
         let hint_norm = file_hint.map(|h| h.replace('\\', "/"));
 
-        // Support Serena-style slash paths (`ClassName/methodName` or `module/symbol`)
+        // Support Serena-style slash paths (`ClassName/methodName`, `ClassName/*`, or `module/symbol`)
         let (parent_filter, leaf_name) = if let Some((parent, leaf)) = q.rsplit_once('/') {
             (Some(parent), leaf)
         } else {
             (None, q)
         };
+
+        // Precompute `Class/*` parent nodes, Contains edges, and enclosing spans when wildcard `*` is used
+        let mut wildcard_contains_ids: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
+        let mut wildcard_parent_spans: Vec<(&ChronosNode, String)> = Vec::new();
+        if let Some(parent) = parent_filter {
+            if leaf_name == "*" {
+                for idx in self.graph.node_indices() {
+                    let candidate = &self.graph[idx];
+                    let cand_file = candidate.location.file.to_string_lossy().replace('\\', "/");
+                    if let Some(ref hint) = hint_norm {
+                        if !cand_file.ends_with(hint) && !cand_file.contains(hint) {
+                            continue;
+                        }
+                    }
+                    let is_parent_match = candidate.name == parent
+                        || candidate.qualified_name == parent
+                        || candidate.qualified_name.ends_with(&format!("::{parent}"));
+                    if is_parent_match && candidate.kind != NodeKind::File {
+                        for edge in self.graph.edges_directed(idx, petgraph::Direction::Outgoing) {
+                            if matches!(edge.weight().kind, EdgeKind::Contains) {
+                                wildcard_contains_ids.insert(self.graph[edge.target()].id.clone());
+                            }
+                        }
+                        if candidate.kind == NodeKind::Class {
+                            wildcard_parent_spans.push((candidate, cand_file));
+                        }
+                    }
+                }
+            }
+        }
 
         let mut scored: Vec<(u8, &ChronosNode)> = Vec::new();
         for node in self.graph.node_weights() {
@@ -782,17 +812,40 @@ impl ChronosGraph {
             let tier = if node.name == q || node.qualified_name == q {
                 0
             } else if let Some(parent) = parent_filter {
-                let name_matches = node.name == leaf_name
-                    || node.name.ends_with(&format!(".{leaf_name}"))
-                    || node.name.ends_with(&format!("::{leaf_name}"));
-                let parent_matches = node.qualified_name.contains(parent)
-                    || file_norm.contains(parent)
-                    || node.name.starts_with(&format!("{parent}."))
-                    || node.name.starts_with(&format!("{parent}::"));
-                if name_matches && parent_matches {
-                    1
+                if leaf_name == "*" {
+                    if node.kind == NodeKind::File {
+                        continue;
+                    }
+                    let via_contains = wildcard_contains_ids.contains(&node.id);
+                    let via_prefix = node.name.starts_with(&format!("{parent}."))
+                        || node.name.starts_with(&format!("{parent}::"))
+                        || node.qualified_name.starts_with(&format!("{parent}::"))
+                        || node.qualified_name.contains(&format!("::{parent}::"))
+                        || node.qualified_name.contains(&format!("::{parent}."));
+                    let via_span = wildcard_parent_spans.iter().any(|(p_node, p_file)| {
+                        &node.id != &p_node.id
+                            && &file_norm == p_file
+                            && node.location.start_line >= p_node.location.start_line
+                            && node.location.end_line <= p_node.location.end_line
+                    });
+                    if via_contains || via_prefix || via_span {
+                        1
+                    } else {
+                        continue;
+                    }
                 } else {
-                    continue;
+                    let name_matches = node.name == leaf_name
+                        || node.name.ends_with(&format!(".{leaf_name}"))
+                        || node.name.ends_with(&format!("::{leaf_name}"));
+                    let parent_matches = node.qualified_name.contains(parent)
+                        || file_norm.contains(parent)
+                        || node.name.starts_with(&format!("{parent}."))
+                        || node.name.starts_with(&format!("{parent}::"));
+                    if name_matches && parent_matches {
+                        1
+                    } else {
+                        continue;
+                    }
                 }
             } else if node.name.ends_with(&format!(".{q}")) || node.name.ends_with(&format!("::{q}")) {
                 2

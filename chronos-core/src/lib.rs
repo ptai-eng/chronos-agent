@@ -31,6 +31,7 @@ pub mod contract;
 pub mod graph;
 pub mod mutation;
 pub mod registry;
+pub mod script;
 pub mod session;
 pub mod telemetry;
 

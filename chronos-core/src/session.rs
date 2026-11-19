@@ -5,16 +5,24 @@
 //! contract diffing, and write/readonly guards behind a single deep module.
 
 use crate::{
-    ast::{dispatcher::LanguageDispatcher, ts_parser::ParsedModule},
+    ast::{
+        dispatcher::LanguageDispatcher,
+        edit::FreshParsedFile,
+        refactor::{execute_refactor_symbol, RefactorSymbolOutcome, RefactorSymbolRequest},
+        symbol_editor::{execute_edit_symbol, EditSymbolOutcome, EditSymbolRequest},
+        ts_parser::ParsedModule,
+    },
     contract::{broker::ContractEvent, ContractEngine},
     graph::{
         git_coupling::ingest_git_co_changes,
         persistent::{compute_file_xxhash64, GraphRepository},
         schema::ChronosGraph,
     },
+    script::{ScriptEngine, ScriptEvalOutcome, ScriptProfile},
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use tracing::{info, warn};
 
@@ -59,6 +67,8 @@ pub struct FileIndexReport {
     pub nodes_inserted: usize,
     pub edges_added: usize,
     pub breaking_contract_event: Option<ContractEvent>,
+    #[serde(default)]
+    pub skipped_unchanged: bool,
 }
 
 /// Canonical runtime session bound to a single workspace root.
@@ -68,6 +78,9 @@ pub struct WorkspaceSession {
     pub repo: Option<GraphRepository>,
     pub contracts: ContractEngine,
     pub readonly: bool,
+    /// Tracks last indexed `xxHash64` per canonical file path so `FileWatcher` bursts
+    /// after direct AST writes skip redundant re-parsing in <0.2ms.
+    pub last_indexed_hashes: HashMap<PathBuf, String>,
 }
 
 impl WorkspaceSession {
@@ -92,6 +105,7 @@ impl WorkspaceSession {
             repo,
             contracts: ContractEngine::new(),
             readonly,
+            last_indexed_hashes: HashMap::new(),
         })
     }
 
@@ -103,6 +117,7 @@ impl WorkspaceSession {
             repo: None,
             contracts: ContractEngine::new(),
             readonly,
+            last_indexed_hashes: HashMap::new(),
         }
     }
 
@@ -117,6 +132,7 @@ impl WorkspaceSession {
         self.graph = reopened.graph;
         self.repo = reopened.repo;
         self.contracts = reopened.contracts;
+        self.last_indexed_hashes = reopened.last_indexed_hashes;
         Ok(())
     }
 
@@ -175,6 +191,48 @@ impl WorkspaceSession {
     /// Parse an in-memory buffer with Tree-sitter and return `Some((line, col))` on first syntax error.
     pub fn validate_syntax(path: &Path, source: &str) -> Result<Option<(usize, usize)>> {
         LanguageDispatcher::check_syntax_errors(path, source)
+    }
+
+    /// Always read current disk bytes and freshly parse a workspace file via Tree-sitter before
+    /// any mutation or symbol-boundary resolution (never trusts cached graph byte offsets).
+    pub fn parse_fresh_file(&self, file_path: &Path) -> Result<FreshParsedFile> {
+        let abs_path = self.validate_workspace_path(file_path)?;
+        if !abs_path.exists() {
+            anyhow::bail!("File not found: {}", abs_path.display());
+        }
+        if !LanguageDispatcher::is_supported(&abs_path) {
+            let ext = abs_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("?");
+            anyhow::bail!(
+                "Unsupported file type: '.{}'. Supported: .ts .tsx .js .jsx .py .rs .go .c .cpp .java",
+                ext
+            );
+        }
+        FreshParsedFile::from_disk(&abs_path)
+    }
+
+    /// Execute a 2-stage syntax & blast-radius gated symbol edit against a fresh disk parse.
+    pub async fn edit_symbol(&mut self, req: EditSymbolRequest) -> Result<EditSymbolOutcome> {
+        execute_edit_symbol(self, req).await
+    }
+
+    /// Execute graph-edge-verified multi-file refactoring (`preview_usages`, `rename`, `safe_delete`).
+    pub async fn refactor_symbol(
+        &mut self,
+        req: RefactorSymbolRequest,
+    ) -> Result<RefactorSymbolOutcome> {
+        execute_refactor_symbol(self, req).await
+    }
+
+    /// Evaluate a bounded `rhai` 5D graph script under strict `ScriptProfile` capabilities.
+    pub fn eval_script(
+        &mut self,
+        profile: ScriptProfile,
+        script: &str,
+    ) -> Result<ScriptEvalOutcome> {
+        ScriptEngine::eval(self, profile, script)
     }
 
     /// Ensure the workspace (or an optional scoped subdirectory/file) is indexed incrementally.
@@ -239,6 +297,12 @@ impl WorkspaceSession {
                 let sync = repo.sync_workspace_incremental(&mut self.graph, files, &mut dispatcher)?;
                 files_reparsed = sync.re_parsed_files;
                 unchanged_files = sync.unchanged_files;
+                for f in files {
+                    if let Ok(h) = compute_file_xxhash64(f) {
+                        let clean_p = strip_windows_verbatim(f.canonicalize().unwrap_or_else(|_| f.clone()));
+                        self.last_indexed_hashes.insert(clean_p, h);
+                    }
+                }
             } else if force_explicit || self.graph.node_count() == 0 {
                 for f in files {
                     if let Ok(parsed) = dispatcher.parse_file(f) {
@@ -247,6 +311,10 @@ impl WorkspaceSession {
                         }
                         self.graph.ingest_parsed_module(&parsed);
                         files_reparsed += 1;
+                        if let Ok(h) = compute_file_xxhash64(f) {
+                            let clean_p = strip_windows_verbatim(f.canonicalize().unwrap_or_else(|_| f.clone()));
+                            self.last_indexed_hashes.insert(clean_p, h);
+                        }
                     }
                 }
                 self.graph.resolve_pending_calls_and_routes();
@@ -261,6 +329,10 @@ impl WorkspaceSession {
                     }
                     self.graph.ingest_parsed_module(&parsed);
                     files_reparsed += 1;
+                    if let Ok(h) = compute_file_xxhash64(f) {
+                        let clean_p = strip_windows_verbatim(f.canonicalize().unwrap_or_else(|_| f.clone()));
+                        self.last_indexed_hashes.insert(clean_p, h);
+                    }
                 }
             }
             self.graph.resolve_pending_calls_and_routes();
@@ -302,8 +374,16 @@ impl WorkspaceSession {
             );
         }
 
-        let source = std::fs::read_to_string(&abs_path)
-            .with_context(|| format!("Failed to read source file {}", abs_path.display()))?;
+        let current_hash = compute_file_xxhash64(&abs_path)?;
+        if self.last_indexed_hashes.get(&abs_path) == Some(&current_hash) {
+            return Ok(FileIndexReport {
+                abs_path,
+                skipped_unchanged: true,
+                ..Default::default()
+            });
+        }
+
+        let (source, _enc) = crate::ast::AtomicFileWriter::read_utf8_preserving_metadata(&abs_path)?;
         let mut dispatcher = LanguageDispatcher::new()?;
         let parsed: ParsedModule = dispatcher.parse_source(&abs_path, &source)?;
 
@@ -327,8 +407,7 @@ impl WorkspaceSession {
 
         if !self.readonly {
             if let Some(ref repo) = self.repo {
-                let hash = compute_file_xxhash64(&abs_path).ok();
-                if let Err(e) = repo.sync_file_delta(&self.graph, &abs_path, hash.as_deref()) {
+                if let Err(e) = repo.sync_file_delta(&self.graph, &abs_path, Some(&current_hash)) {
                     warn!(
                         "KuzuDB delta sync failed for {}: {}",
                         abs_path.display(),
@@ -337,6 +416,7 @@ impl WorkspaceSession {
                 }
             }
         }
+        self.last_indexed_hashes.insert(abs_path.clone(), current_hash);
 
         Ok(FileIndexReport {
             abs_path,
@@ -350,11 +430,13 @@ impl WorkspaceSession {
             nodes_inserted,
             edges_added,
             breaking_contract_event,
+            skipped_unchanged: false,
         })
     }
 
     /// Evict nodes and persisted delta when a tracked workspace file is deleted.
     pub fn evict_file(&mut self, file_path: &Path) {
+        self.last_indexed_hashes.remove(file_path);
         self.graph.remove_nodes_for_file(file_path);
         if let Some(ref repo) = self.repo {
             if let Err(e) = repo.sync_file_delta(&self.graph, file_path, None) {
@@ -556,5 +638,29 @@ mod tests {
         collect_supported_files(dir.path(), &mut out, 100);
         assert_eq!(out.len(), 1);
         assert!(out[0].ends_with("app.ts"));
+    }
+
+    #[tokio::test]
+    async fn test_index_file_skips_unchanged_xxhash64() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("src").join("cached.rs");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "pub fn stable() -> i32 { 42 }\n").unwrap();
+
+        let mut session = WorkspaceSession::open_in_memory(dir.path().to_path_buf(), false);
+        let first = session.index_file(&file).await.unwrap();
+        assert!(!first.skipped_unchanged);
+        assert_eq!(first.functions, 1);
+
+        // Second call without modifying file content short-circuits via xxHash64
+        let second = session.index_file(&file).await.unwrap();
+        assert!(second.skipped_unchanged);
+        assert_eq!(second.functions, 0);
+
+        // Editing content invalidates xxHash64 cache and triggers full re-parse
+        std::fs::write(&file, "pub fn stable() -> i32 { 43 }\n").unwrap();
+        let third = session.index_file(&file).await.unwrap();
+        assert!(!third.skipped_unchanged);
+        assert_eq!(third.functions, 1);
     }
 }

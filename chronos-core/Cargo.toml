@@ -41,6 +41,7 @@ indexmap = { workspace = true }
 rayon = { workspace = true }
 tempfile = { workspace = true }
 async-trait = "0.1"
+rhai = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

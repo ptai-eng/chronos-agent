@@ -1,29 +1,50 @@
 //! # `chronos_explore` Tool Handler (12th MCP Tool)
 //!
-//! 1-Call Subagent Context Engine inspired by Anthropic Claude Code `Explore.md` and
-//! OpenAI Codex `codex-auto-review.md`.
-//!
-//! In a single `<15ms` call, returns:
-//! - Top `max_symbols` BM25/regex matching symbols
-//! - Verbatim source code (`start_line..=end_line`) with line numbers
-//! - Inbound callers, outbound callees, and covering tests
-//! - Real user-facing `verification_surfaces` (`ApiRoute`, `CliCommand`, `RootEntrypoint`, `TestCase`)
-//! - 4-Angle Code Review diagnostics (`Reuse`, `Efficiency`, `Simplification`, `Altitude`)
+//! 1-Call Subagent Context Engine supporting:
+//! - Natural-language BM25 / regex search
+//! - Progressive `Class/*` wildcard outlines & `include_body: false` signature-only slices
+//! - Batch `queries[]` & class expansion `depth`
+//! - Inline `include_blast_radius` risk summaries
+//! - Sandboxed `ScriptProfile::ReadOnly` Rhai 5D graph queries (`script` parameter)
 
 use crate::protocol::CallToolResult;
 use crate::state::SharedState;
-use chronos_core::graph::query::GraphQueryEngine;
+use chronos_core::graph::query::{ExploreOptions, GraphQueryEngine};
+use chronos_core::script::ScriptProfile;
 use serde_json::{json, Value};
 
 pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallToolResult {
-    let query = match params
+    let query = params
         .as_ref()
         .and_then(|p| p.get("query"))
         .and_then(|v| v.as_str())
-    {
-        Some(q) if !q.trim().is_empty() => q.to_string(),
-        _ => return CallToolResult::error("Missing required non-empty parameter 'query'"),
-    };
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+
+    let queries: Vec<String> = params
+        .as_ref()
+        .and_then(|p| p.get("queries"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.trim().to_string()))
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let script = params
+        .as_ref()
+        .and_then(|p| p.get("script"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if query.is_empty() && queries.is_empty() && script.is_none() {
+        return CallToolResult::error(
+            "Missing required query: provide at least one of 'query', 'queries', or 'script'",
+        );
+    }
 
     let file_filter = params
         .as_ref()
@@ -37,7 +58,27 @@ pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallTo
         .and_then(|v| v.as_u64())
         .map(|n| n as usize)
         .unwrap_or(3)
-        .clamp(1, 10);
+        .clamp(1, 20);
+
+    let include_body = params
+        .as_ref()
+        .and_then(|p| p.get("include_body"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let depth = params
+        .as_ref()
+        .and_then(|p| p.get("depth"))
+        .and_then(|v| v.as_u64())
+        .map(|n| n as usize)
+        .unwrap_or(1)
+        .clamp(1, 5);
+
+    let include_blast_radius = params
+        .as_ref()
+        .and_then(|p| p.get("include_blast_radius"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     let auto_index = params
         .as_ref()
@@ -59,15 +100,45 @@ pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallTo
         }
     }
 
+    // Evaluate bounded ReadOnly Rhai script if provided (write functions structurally excluded)
+    let script_outcome = if let Some(ref script_src) = script {
+        let mut st = state.write().await;
+        match st.session.eval_script(ScriptProfile::ReadOnly, script_src) {
+            Ok(outcome) => Some(outcome),
+            Err(e) => {
+                return CallToolResult::error(format!(
+                    "chronos_explore ReadOnly script error: {e}"
+                ))
+            }
+        }
+    } else {
+        None
+    };
+
     let st = state.read().await;
     let status = st.graph.status_report();
-    let (cov, _, _) = chronos_core::blast_radius::impact_matrix::CoverageReport::from_graph(&st.graph);
-    let qe = GraphQueryEngine::new(&st.graph);
-    let explore_res = qe.explore_graph(&query, file_filter.as_deref(), max_symbols);
+    let (cov, _, _) =
+        chronos_core::blast_radius::impact_matrix::CoverageReport::from_graph(&st.graph);
 
-    let output = json!({
+    let explore_res = if !query.is_empty() || !queries.is_empty() {
+        let qe = GraphQueryEngine::new(&st.graph);
+        Some(qe.explore_graph_with_options(
+            &query,
+            &ExploreOptions {
+                queries,
+                file_filter,
+                max_symbols,
+                include_body,
+                depth,
+                include_blast_radius,
+            },
+        ))
+    } else {
+        None
+    };
+
+    let mut output = json!({
         "status": "ok",
-        "explore": explore_res,
         "coverage": {
             "completeness": cov.completeness,
             "total_nodes": status.total_nodes,
@@ -83,6 +154,16 @@ pub async fn handle_explore(state: SharedState, params: Option<Value>) -> CallTo
             }
         }
     });
+
+    if let Some(exp) = explore_res {
+        output["explore"] = serde_json::to_value(exp).unwrap_or(Value::Null);
+    }
+    if let Some(sc) = script_outcome {
+        output["script_result"] = sc.result;
+        if !sc.printed_logs.is_empty() {
+            output["printed_logs"] = json!(sc.printed_logs);
+        }
+    }
 
     CallToolResult::text(serde_json::to_string_pretty(&output).unwrap_or_default())
 }

@@ -2,7 +2,7 @@
   "name": "chronos-agent",
   "displayName": "CHRONOS Agent",
   "description": "5D Living Code Intelligence Harness — Real-time blast-radius, 1-call chronos_explore, 4-angle audit, multi-agent synthesizer + mutation score",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "publisher": "ptai-eng",
   "engines": {
     "vscode": "^1.90.0"

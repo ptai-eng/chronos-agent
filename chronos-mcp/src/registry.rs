@@ -3,7 +3,7 @@
 //! Bridges `chronos_core::registry::ToolRegistry` into `chronos-mcp`:
 //! - Generates `tools/list` from the canonical core specification
 //! - Enforces `--readonly` mode guards
-//! - Dispatches `tools/call` across all 12 tools
+//! - Dispatches `tools/call` across all 14 tools (plus Serena compatibility aliases)
 //! - Automatically drains pending `ContractEngine` alerts into `_meta.contract_alerts`
 //! - Applies universal `max_answer_chars` (default 24,000) UTF-8 safe response budgeting
 
@@ -40,7 +40,13 @@ impl McpToolRegistry {
         tool_name: &str,
         arguments: Option<Value>,
     ) -> std::result::Result<CallToolResult, JsonRpcError> {
-        let Some(spec) = ToolRegistry::find(tool_name) else {
+        let canonical_name = match tool_name {
+            "chronos_replace_symbol_body" => "chronos_edit_symbol",
+            "chronos_rename_symbol" | "chronos_safe_delete" => "chronos_refactor_symbol",
+            other => other,
+        };
+
+        let Some(spec) = ToolRegistry::find(canonical_name) else {
             warn!("Unknown tool called: {}", tool_name);
             return Err(JsonRpcError {
                 code: -32601,
@@ -49,32 +55,58 @@ impl McpToolRegistry {
             });
         };
 
+        // Inject default operation/action when invoked via Serena compatibility aliases
+        let normalized_args = match tool_name {
+            "chronos_replace_symbol_body" => Some(inject_default_arg(arguments, "operation", "replace_body")),
+            "chronos_rename_symbol" => Some(inject_default_arg(arguments, "action", "rename")),
+            "chronos_safe_delete" => Some(inject_default_arg(arguments, "action", "safe_delete")),
+            _ => arguments,
+        };
+
         let readonly = {
             let st = state.read().await;
             st.readonly
         };
-        if readonly && !spec.readonly {
+
+        let dry_run = normalized_args
+            .as_ref()
+            .and_then(|a| a.get("dry_run"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let refactor_action = normalized_args
+            .as_ref()
+            .and_then(|a| a.get("action"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("preview_usages");
+
+        let readonly_allowed = spec.readonly
+            || (canonical_name == "chronos_refactor_symbol"
+                && (refactor_action == "preview_usages" || dry_run));
+
+        if readonly && !readonly_allowed {
             return Ok(CallToolResult::error(format!(
                 "Security: tool '{}' is disabled in --readonly mode.",
                 tool_name
             )));
         }
 
-        let max_chars = resolve_max_answer_chars(arguments.as_ref());
+        let max_chars = resolve_max_answer_chars(normalized_args.as_ref());
 
-        let mut result = match tool_name {
-            "chronos_analyze_file" => tools::handle_analyze_file(state.clone(), arguments).await,
-            "chronos_query_hotspots" => tools::handle_query_hotspots(state.clone(), arguments).await,
-            "chronos_blast_radius" => tools::handle_blast_radius(state.clone(), arguments).await,
-            "chronos_mutation_gate" => tools::handle_mutation_gate(state.clone(), arguments).await,
-            "chronos_contract_status" => tools::handle_contract_status(state.clone(), arguments).await,
-            "chronos_query_graph" => tools::handle_query_graph(state.clone(), arguments).await,
-            "chronos_search_graph" => tools::handle_search_graph(state.clone(), arguments).await,
-            "chronos_get_snippet" => tools::handle_get_snippet(state.clone(), arguments).await,
-            "chronos_get_architecture" => tools::handle_get_architecture(state.clone(), arguments).await,
-            "chronos_hydrate_telemetry" => tools::handle_hydrate_telemetry(state.clone(), arguments).await,
-            "chronos_generate_agents_md" => tools::handle_generate_agents_md(state.clone(), arguments).await,
-            "chronos_explore" => tools::handle_explore(state.clone(), arguments).await,
+        let mut result = match canonical_name {
+            "chronos_analyze_file" => tools::handle_analyze_file(state.clone(), normalized_args).await,
+            "chronos_query_hotspots" => tools::handle_query_hotspots(state.clone(), normalized_args).await,
+            "chronos_blast_radius" => tools::handle_blast_radius(state.clone(), normalized_args).await,
+            "chronos_mutation_gate" => tools::handle_mutation_gate(state.clone(), normalized_args).await,
+            "chronos_contract_status" => tools::handle_contract_status(state.clone(), normalized_args).await,
+            "chronos_query_graph" => tools::handle_query_graph(state.clone(), normalized_args).await,
+            "chronos_search_graph" => tools::handle_search_graph(state.clone(), normalized_args).await,
+            "chronos_get_snippet" => tools::handle_get_snippet(state.clone(), normalized_args).await,
+            "chronos_get_architecture" => tools::handle_get_architecture(state.clone(), normalized_args).await,
+            "chronos_hydrate_telemetry" => tools::handle_hydrate_telemetry(state.clone(), normalized_args).await,
+            "chronos_generate_agents_md" => tools::handle_generate_agents_md(state.clone(), normalized_args).await,
+            "chronos_explore" => tools::handle_explore(state.clone(), normalized_args).await,
+            "chronos_edit_symbol" => tools::handle_edit_symbol(state.clone(), normalized_args).await,
+            "chronos_refactor_symbol" => tools::handle_refactor_symbol(state.clone(), normalized_args).await,
             _ => {
                 return Err(JsonRpcError {
                     code: -32601,
@@ -125,6 +157,17 @@ impl McpToolRegistry {
 
         Ok(result)
     }
+}
+
+fn inject_default_arg(args: Option<Value>, key: &str, value: &str) -> Value {
+    let mut map = match args {
+        Some(Value::Object(m)) => m,
+        _ => serde_json::Map::new(),
+    };
+    if !map.contains_key(key) {
+        map.insert(key.to_string(), Value::String(value.to_string()));
+    }
+    Value::Object(map)
 }
 
 #[cfg(test)]
@@ -232,5 +275,95 @@ mod tests {
         .unwrap();
         let meta = after_break.meta.expect("breaking change must populate _meta");
         assert!(meta["contract_alerts"].as_array().unwrap().len() >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_v18_14_tools_readonly_guards_and_explore_script() {
+        assert_eq!(McpToolRegistry::list_tools(false).len(), 14);
+        assert_eq!(McpToolRegistry::list_tools(true).len(), 12);
+
+        let ws = TempWorkspace::new("v18_guards");
+        let file = ws.0.join("svc.rs");
+        std::fs::write(
+            &file,
+            "pub fn greet(x: i32) -> i32 {\n    x + 1\n}\n",
+        )
+        .unwrap();
+
+        let state_ro = new_shared_state_with_options(ws.0.clone(), true);
+
+        // 1. --readonly blocks chronos_edit_symbol & aliases and mutating refactor actions
+        let edit_blocked = McpToolRegistry::dispatch(
+            state_ro.clone(),
+            "chronos_edit_symbol",
+            Some(json!({
+                "symbol": "greet",
+                "file": "svc.rs",
+                "operation": "replace_body",
+                "new_code": "pub fn greet(x: i32) -> i32 { x + 2 }"
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(edit_blocked.is_error, Some(true));
+        assert!(edit_blocked.content[0].text.contains("--readonly"));
+
+        let alias_blocked = McpToolRegistry::dispatch(
+            state_ro.clone(),
+            "chronos_replace_symbol_body",
+            Some(json!({
+                "symbol": "greet",
+                "file": "svc.rs",
+                "new_code": "pub fn greet(x: i32) -> i32 { x + 2 }"
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(alias_blocked.is_error, Some(true));
+
+        let rename_blocked = McpToolRegistry::dispatch(
+            state_ro.clone(),
+            "chronos_rename_symbol",
+            Some(json!({ "symbol": "greet", "new_name": "welcome", "file": "svc.rs" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rename_blocked.is_error, Some(true));
+
+        // 2. --readonly allows chronos_refactor_symbol(preview_usages)
+        let preview_ok = McpToolRegistry::dispatch(
+            state_ro.clone(),
+            "chronos_refactor_symbol",
+            Some(json!({ "symbol": "greet", "action": "preview_usages", "file": "svc.rs" })),
+        )
+        .await
+        .unwrap();
+        assert_ne!(preview_ok.is_error, Some(true));
+        assert!(preview_ok.content[0].text.contains("\"status\": \"preview\""));
+
+        // 3. ReadWrite MCP allows chronos_explore.script read queries, but STILL blocks write functions
+        let state_rw = new_shared_state_with_options(ws.0.clone(), false);
+        let script_ok = McpToolRegistry::dispatch(
+            state_rw.clone(),
+            "chronos_explore",
+            Some(json!({
+                "script": "explore(\"greet\").symbols_returned"
+            })),
+        )
+        .await
+        .unwrap();
+        assert_ne!(script_ok.is_error, Some(true));
+        assert!(script_ok.content[0].text.contains("\"script_result\": 1"));
+
+        let script_inject_blocked = McpToolRegistry::dispatch(
+            state_rw,
+            "chronos_explore",
+            Some(json!({
+                "script": "edit_symbol(\"greet\", \"replace_body\", \"pub fn greet(x: i32) -> i32 { 0 }\", \"svc.rs\")"
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(script_inject_blocked.is_error, Some(true));
     }
 }

@@ -1,51 +1,54 @@
-# CHRONOS-AGENT v1.8.0 Roadmap — Serena-Inspired Symbolic Action & Refactoring Engine
+# CHRONOS-AGENT v1.8.0 & v1.8.1 Roadmap — Serena-Inspired Symbolic Action, Refactoring & Hybrid LSP Engine
 
-> **Target Release:** `v1.8.0` (Builds on top of the deepened seams in [`docs/IMPLEMENTATION-PLAN-v1.7.md`](./IMPLEMENTATION-PLAN-v1.7.md))  
+> **Target Releases:**
+> - **`v1.8.0` (Core Symbolic Action & Rhai Script Release):** [`docs/IMPLEMENTATION-PLAN-v1.8.md`](./IMPLEMENTATION-PLAN-v1.8.md) — `chronos_edit_symbol` (#13), `chronos_refactor_symbol` (#14), Progressive `name_path` (`Class/*`, `include_body: false`), Multi-Query `chronos_explore`, and Embedded Sandboxed `rhai` 5D Script Engine (`chronos eval` / `chronos repl`).
+> - **`v1.8.1` (Follow-Up Hybrid LSP Release):** On-Demand `LspSemanticAdapter` & `chronos lsp-hydrate`.
 > **Primary Sources Inspected:**
-> - Installed `serena` (`oraios/serena`) MCP Server schemas & runtime (`initial_instructions`, `activate_project`, `serena_repl` facades: `s.lsp`, `s.edit`, `s.fs`, `s.mem`, `s.shell`, `s.cfg`)
+> - Installed `serena` (`oraios/serena`) MCP Server schemas & runtime (`initial_instructions`, `activate_project`, `serena_repl` facades)
 > - Agent Memory record: `mem_mvpcp6mh_f2cd008c8e98`
 
 ---
 
-## 1. Strategic Vision for `v1.8.0`
+## 1. Strategic Vision (`v1.8.0` → `v1.8.1`)
 
-Once `v1.7.0` completes the 6 Core Module Deepenings (`WorkspaceSession`, `ToolRegistry`, `GraphRepository`, `CodeIndex` + `SourceLocation` byte spans, `ContractEngine`, and `MutationArena` + `TextEdit`), `CHRONOS-AGENT v1.8.0` will evolve from a **5D Code Intelligence & Verification Sensor** into a **Blast-Radius-Gated Symbolic Action Engine**.
+With `v1.7.0`'s 6 core module deepenings (`WorkspaceSession`, `ToolRegistry`, `GraphRepository`, `CodeIndex` + `SourceLocation` byte spans, `ContractEngine`, and `MutationArena` + `TextEdit`) complete, the `v1.8.x` series transforms CHRONOS from a **5D Code Intelligence Sensor** into a **Blast-Radius-Gated Symbolic Action Engine**:
 
-By refining the lessons from `Serena` (`oraios/serena`) with strict architectural guardrails (avoiding tool bloat, unsafe homonym renames, and heavy mandatory LSP daemons), `v1.8.0` adds **2 new write tools (bringing the total to 14 MCP tools)** plus progressive symbol navigation and optional LSP hydration.
+- **`v1.8.0`** ships **2 new consolidated write tools (14 MCP tools total)**, fresh-parse symbol editing, graph-edge-verified multi-file refactoring, progressive `Class/*` outlines, and an embedded **`rhai` 5D Script Engine** — with **zero background daemon overhead** (`<15ms` Tree-sitter default).
+- **`v1.8.1`** layers the opt-in **On-Demand Hybrid `LspSemanticAdapter` (`chronos lsp-hydrate`)** onto the `SemanticResolver` seam to resolve polymorphic cross-module call sites and compiler diagnostics.
 
 ---
 
-## 2. Five Refined Expansion Pillars for `v1.8.0`
+## 2. Four Core Pillars in `v1.8.0` (Detailed in `IMPLEMENTATION-PLAN-v1.8.md`)
 
-### Pillar 1 — Symbol-Boundary AST Editing (`chronos_edit_symbol` — 13th MCP Tool)
-- **Built on `v1.7.0` Seams:** `SourceLocation` (`start_byte..end_byte`), `TextEdit`, `WorkspaceSession::index_file`, and `ContractEngine`.
-- **Operations:** `"replace_body"` | `"insert_before"` | `"insert_after"`.
-- **3-Layer Defense-in-Depth (`Q3`):**
-  1. **In-Memory Tree-sitter Syntax Gate:** Applies `TextEdit` in memory and re-parses with `LanguageDispatcher` **before touching disk**. If `tree.root_node().has_error()` is true, rejects the edit immediately with exact line/column syntax diagnostics.
-  2. **Pre-Edit 5D Blast-Radius & Contract Gate:** If the target symbol sits in `RiskZone::Critical` or changes its public signature across callers without `force: true`, returns a `dry_run` diff preview + `structured_findings` + `verification_surfaces`.
-  3. **Atomic KuzuDB Delta Sync:** Updates `GraphRepository::sync_file_delta` in `<5ms` after writing.
+### Pillar 1 — Fresh-Parse Symbol-Boundary AST Editing (`chronos_edit_symbol` — 13th MCP Tool)
+- **Operations:** `"replace_body"` | `"insert_before"` | `"insert_after"` (alias: `chronos_replace_symbol_body`).
+- **Defense-in-Depth:**
+  1. **Fresh Disk Re-Parse:** Always re-parses the target file from disk right before editing (never mutates using cached graph byte offsets) and resolves attached leading trivia (`full_symbol_span` including doc-comments/attributes vs `declaration_span`).
+  2. **In-Memory Tree-sitter Syntax Gate:** Rejects any edit that introduces a syntax error before touching disk.
+  3. **Contract & Caller Blast-Radius Gate:** Internal body edits write immediately via `AtomicFileWriter` (preserving `CRLF`/`LF` and UTF-8 BOM); signature changes on symbols with active callers (`fan_in > 0`) return `status: "blocked_requires_force"` + `isError: true` with a unified diff preview unless `force: true`.
 
-### Pillar 2 — Homonym-Safe Atomic Refactoring (`chronos_refactor_symbol` — 14th MCP Tool)
-- **Built on `v1.7.0` Seams:** `CodeIndex::resolve_symbol`, `WorkspaceSession`, and `TextEdit`.
-- **Actions:** `"safe_delete"` | `"rename"` | `"preview_usages"`.
-- **Why It Beats Naive AST Refactoring:**
-  - **`safe_delete`:** Checks static `CALLS`, `TESTS`, cross-language `ApiRoute` bridges (`/{*}`), and Git `CO_CHANGES_WITH` partners. Refuses deletion if any active caller exists unless `force: true`.
-  - **`rename` (Homonym Guard):** Checks whether the symbol name has homonyms (`ambiguous_homonyms > 1`) or `unresolved_calls > 0`. When unambiguous, applies atomic multi-file `TextEdit`s with full rollback if any file fails Tree-sitter syntax verification; when ambiguous, automatically enforces `dry_run: true` with numbered occurrence previews so the agent can select exact occurrence IDs.
+### Pillar 2 — Graph-Edge-Verified Multi-File Refactoring (`chronos_refactor_symbol` — 14th MCP Tool)
+- **Actions:** `"rename"` | `"safe_delete"` | `"preview_usages"` (aliases: `chronos_rename_symbol`, `chronos_safe_delete`).
+- **Precision & Safety:**
+  - **`rename`:** Distinguishes graph-verified occurrences (declaration + verified `CALLS`/`TESTS` call sites + `IMPORTS` specifiers) from unverified candidate sites (member accesses `obj.foo` without receiver type info, homonyms `> 1`, or files with `unresolved_calls > 0`). Blocks with `status: "blocked_ambiguous_rename"` if any ambiguity exists unless `force: true`. Commits across multiple files transactionally via `AtomicFileWriter` with full rollback on any syntax or I/O failure.
+  - **`safe_delete`:** Blocks deletion if active `CALLS`, `TESTS`, `ApiRoute`, or entrypoint/public/trait-impl guards apply (unless `force: true`), and cleanly removes `full_symbol_span` (including leading doc-comments and decorators).
 
-### Pillar 3 — Hierarchical `name_path` & Progressive Overview (`include_body: false`, `depth`)
-- **Built on `v1.7.0` Seams:** `CodeIndex::resolve_symbol`.
-- **Capabilities:**
-  - Supports `StructName/method_name`, `ClassName/__init__`, and wildcard `ClassName/*` (`depth: 1`, `include_body: false`) in `chronos_explore`, `chronos_get_snippet`, and `chronos_search_graph`.
-  - Lets agents inspect all method signatures, line ranges, and complexity scores of a class/module at near-zero token cost before fetching specific bodies.
+### Pillar 3 — Hierarchical `name_path` (`Class/*`) & Multi-Query `chronos_explore`
+- Supports `StructName/method_name` and wildcard `ClassName/*` with `include_body: false`, `depth`, `queries: Vec<String>`, and `include_blast_radius: bool` in `chronos_explore` (#12).
+- Lets agents inspect all method signatures, line ranges, and complexity scores of a class/module or batch 3–5 symbol lookups in a single MCP call.
 
-### Pillar 4 — Multi-Query `chronos_explore` & Universal Token Budgeting (`max_answer_chars`)
-- **Built on `v1.7.0` Seams:** `ToolRegistry` response-budget middleware.
-- **No Tool Bloat (Stays at 14 MCP Tools):**
-  - Instead of adding a 15th `chronos_batch` tool, upgrades `chronos_explore` (#12) to accept `queries: Vec<String>` + `include_blast_radius: bool` + `include_body: bool` + `max_answer_chars: usize` (default `24,000`).
-  - Allows subagents to explore 3–5 symbols, their blast radius, verification surfaces, and 4-angle review diagnostics in a **single MCP round-trip**.
+### Pillar 4 — Sandboxed `rhai` 5D Script Engine (`chronos repl` / `chronos eval` & Read-Only MCP `script`)
+- Embeds `rhai` (`Engine::new_raw()`) with strict operation, call-depth, and memory limits (`max_operations = 50_000`).
+- **Strict Privilege Separation:**
+  - Inside MCP `chronos_explore.script` (and `--readonly` CLI), runs `ScriptProfile::ReadOnly` (exposing only `explore`, `search`, `blast_radius`, `hotspots`, `arch`, `snippet`, `cypher` — zero write functions, preventing prompt-injection write escalation).
+  - Inside CLI `chronos eval` and `chronos repl`, runs `ScriptProfile::FullCli` (adding `edit_symbol` and `refactor_symbol` behind the 2-stage gate).
 
-### Pillar 5 — Opt-In `LspAdapter` (`chronos lsp-hydrate` & `use_lsp: true`)
-- **Built on `v1.7.0` Seams:** `SemanticResolver` trait (`AstAdapter` default).
-- **Lightweight One-Shot Design:**
-  - Keeps `chronos-mcp` zero-dependency and `<15ms` by default.
-  - Provides `chronos lsp-hydrate` (and optional `use_lsp: true` with bounded timeout) speaking stdio JSON-RPC to installed language servers (e.g. `rust-analyzer`, `typescript-language-server`, `pyright-langserver`, `gopls`) to resolve polymorphic `unresolved_calls` and ingest compiler diagnostics.
+---
+
+## 3. Follow-Up Milestone `v1.8.1` — Opt-In Hybrid `LspSemanticAdapter` (`chronos lsp-hydrate`)
+
+- **Built on `v1.7.0` Seam:** `SemanticResolver` trait (`AstSemanticAdapter` default).
+- **Hardened Cross-Platform Design for `v1.8.1`:**
+  - Resolves Windows npm `.cmd` wrappers (`typescript-language-server.cmd`, `pyright-langserver.cmd`) alongside native binaries (`rust-analyzer`, `gopls`, `clangd`).
+  - Speaks `Content-Length` framed stdio JSON-RPC (`initialize` → `initialized` → waits for `$/progress` indexing completion → `textDocument/didOpen` → `references` / `rename` → `shutdown`).
+  - Uses tiered timeouts (`60s` for CLI `chronos lsp-hydrate` cold indexing; `15s` for on-demand queries) and gracefully falls back to `AstSemanticAdapter` with explicit `coverage.residual_unknowns` when a language server is absent or times out.

@@ -33,7 +33,7 @@ pub struct ImportRef {
 }
 
 /// All symbols and relationships extracted from a single source file
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParsedModule {
     pub file_path: PathBuf,
     pub functions: Vec<ChronosNode>,
