@@ -509,6 +509,7 @@ fn run_refactor_from_script(
             },
             dry_run,
             force,
+            use_lsp: false,
         },
     ))
     .map_err(|e| Box::new(EvalAltResult::from(e.to_string())))?;

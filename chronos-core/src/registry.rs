@@ -829,6 +829,15 @@ const REFACTOR_SYMBOL_PARAMS: &[ParamSpec] = &[
         required_in_mcp: false,
         nullable_in_strict: false,
     },
+    ParamSpec {
+        name: "use_lsp",
+        json_type: "boolean",
+        description: Some("Opt-in hybrid compiler LSP reference resolution to disambiguate candidate_sites; falls back cleanly to AST if unavailable (default: false)"),
+        enum_values: None,
+        default_val: Some(DefaultVal::Bool(false)),
+        required_in_mcp: false,
+        nullable_in_strict: false,
+    },
     MAX_ANSWER_CHARS_PARAM,
 ];
 

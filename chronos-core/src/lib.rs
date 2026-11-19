@@ -29,6 +29,7 @@ pub mod ast;
 pub mod blast_radius;
 pub mod contract;
 pub mod graph;
+pub mod lsp;
 pub mod mutation;
 pub mod registry;
 pub mod script;

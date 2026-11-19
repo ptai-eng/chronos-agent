@@ -266,6 +266,9 @@ enum Commands {
         /// Preview multi-file usages & diff without writing disk
         #[arg(long)]
         dry_run: bool,
+        /// Opt-in hybrid compiler LSP disambiguation for ambiguous member accesses
+        #[arg(long)]
+        lsp: bool,
         /// Force applying verified edits even when homonyms/unresolved/candidate sites exist
         #[arg(long)]
         force: bool,
@@ -314,6 +317,23 @@ enum Commands {
         /// Target client hook schema: antigravity | claude | codex
         #[arg(short, long, default_value = "antigravity")]
         client: String,
+    },
+    /// Hydrate cross-module references & diagnostics using opt-in compiler LSP (falls back cleanly to AST)
+    LspHydrate {
+        /// Target file inside workspace
+        file: PathBuf,
+        /// Target symbol name or 'Class/method' path to inspect references for
+        #[arg(short, long)]
+        symbol: Option<String>,
+        /// Optional language override (rust | typescript | python | go | cpp | java)
+        #[arg(short, long)]
+        lang: Option<String>,
+        /// Timeout in seconds for LSP startup + cold indexing (default: 60)
+        #[arg(long, default_value_t = 60)]
+        timeout: u64,
+        /// Output structured JSON report
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -764,6 +784,7 @@ async fn main() -> Result<()> {
             new_name,
             file,
             dry_run,
+            lsp,
             force,
             json,
         } => {
@@ -778,6 +799,7 @@ async fn main() -> Result<()> {
                     file,
                     dry_run,
                     force,
+                    use_lsp: lsp,
                 })
                 .await?;
             if json {
@@ -817,6 +839,7 @@ async fn main() -> Result<()> {
                     file,
                     dry_run,
                     force,
+                    use_lsp: false,
                 })
                 .await?;
             if json {
@@ -938,6 +961,13 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        Commands::LspHydrate {
+            file,
+            symbol,
+            lang,
+            timeout,
+            json,
+        } => commands::lsp_hydrate::run(workspace, file, symbol, lang, timeout, json).await,
     }
 }
 
@@ -968,8 +998,11 @@ mod tests {
         .unwrap();
         assert!(matches!(edit.command, Commands::Edit { dry_run: true, .. }));
 
-        let rename = Cli::try_parse_from(["chronos", "rename", "old_fn", "new_fn", "--force"]).unwrap();
-        assert!(matches!(rename.command, Commands::Rename { force: true, .. }));
+        let rename = Cli::try_parse_from(["chronos", "rename", "old_fn", "new_fn", "--force", "--lsp"]).unwrap();
+        assert!(matches!(rename.command, Commands::Rename { force: true, lsp: true, .. }));
+
+        let hydrate_lsp = Cli::try_parse_from(["chronos", "lsp-hydrate", "src/lib.rs", "--symbol", "compute", "--json"]).unwrap();
+        assert!(matches!(hydrate_lsp.command, Commands::LspHydrate { json: true, .. }));
 
         let delete = Cli::try_parse_from(["chronos", "delete", "dead_fn", "--dry-run"]).unwrap();
         assert!(matches!(delete.command, Commands::Delete { dry_run: true, .. }));

@@ -9,6 +9,7 @@
 //! - Verbatim source snippet extraction with callers/callees/tests (`get_code_snippet`)
 //! - Community-clustered architecture & O(N^2) hotspot overview (`get_architecture`)
 
+use crate::blast_radius::impact_matrix::CoverageReport;
 use crate::blast_radius::ImpactAnalyzer;
 use crate::contract::signature::extract_header_signature;
 use crate::graph::schema::{ArchCluster, ChronosGraph, ChronosNode, NodeId, NodeKind, StaticHeuristics};
@@ -1448,6 +1449,22 @@ impl<'g> GraphQueryEngine<'g> {
 /// Seam alias highlighting the deepened index role of `GraphQueryEngine`.
 pub type CodeIndex<'g> = GraphQueryEngine<'g>;
 
+/// File/line/byte location resolved across the `SemanticResolver` seam.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SemanticReference {
+    pub file: String,
+    /// 1-based line number.
+    pub line: usize,
+    /// 1-based column (UTF-8 / UTF-16 character index when known).
+    pub column: usize,
+    #[serde(default)]
+    pub start_byte: Option<usize>,
+    #[serde(default)]
+    pub end_byte: Option<usize>,
+    #[serde(default)]
+    pub is_definition: bool,
+}
+
 /// Semantic diagnostics + caller/callee summary returned across the `SemanticResolver` seam.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemanticDiagnosticsSummary {
@@ -1456,6 +1473,12 @@ pub struct SemanticDiagnosticsSummary {
     pub callers: Vec<String>,
     pub callees: Vec<String>,
     pub compiler_diagnostics: Vec<String>,
+    #[serde(default)]
+    pub references: Vec<SemanticReference>,
+    #[serde(default)]
+    pub coverage: Option<CoverageReport>,
+    #[serde(default)]
+    pub residual_unknowns: Vec<String>,
 }
 
 /// Ports & Adapters seam unifying fast in-process Tree-sitter resolution (`AstSemanticAdapter`)
@@ -1482,13 +1505,37 @@ impl<'g> SemanticResolver for AstSemanticAdapter<'g> {
     }
 
     fn resolve_references(&self, symbol: &str, file_hint: Option<&str>) -> SemanticDiagnosticsSummary {
+        let (cov, residual_unknowns, _) = CoverageReport::from_graph(self.graph);
+        let coverage = Some(cov);
         if let Some(node) = self.graph.resolve_first_symbol(symbol, file_hint) {
+            let callers = self.graph.callers_of(&node.id);
+            let mut references = vec![SemanticReference {
+                file: node.location.file.to_string_lossy().replace('\\', "/"),
+                line: node.location.start_line,
+                column: 1,
+                start_byte: Some(node.location.start_byte),
+                end_byte: Some(node.location.end_byte),
+                is_definition: true,
+            }];
+            for caller in &callers {
+                references.push(SemanticReference {
+                    file: caller.location.file.to_string_lossy().replace('\\', "/"),
+                    line: caller.location.start_line,
+                    column: 1,
+                    start_byte: Some(caller.location.start_byte),
+                    end_byte: Some(caller.location.end_byte),
+                    is_definition: false,
+                });
+            }
             SemanticDiagnosticsSummary {
                 adapter_name: self.adapter_name().to_string(),
                 resolved_symbol: Some(node.qualified_name.clone()),
-                callers: self.graph.callers_of(&node.id).into_iter().map(|n| n.name.clone()).collect(),
+                callers: callers.into_iter().map(|n| n.name.clone()).collect(),
                 callees: self.graph.callees_of(&node.id).into_iter().map(|n| n.name.clone()).collect(),
                 compiler_diagnostics: Vec::new(),
+                references,
+                coverage,
+                residual_unknowns,
             }
         } else {
             SemanticDiagnosticsSummary {
@@ -1497,6 +1544,9 @@ impl<'g> SemanticResolver for AstSemanticAdapter<'g> {
                 callers: Vec::new(),
                 callees: Vec::new(),
                 compiler_diagnostics: Vec::new(),
+                references: Vec::new(),
+                coverage,
+                residual_unknowns,
             }
         }
     }

@@ -21,6 +21,9 @@ use crate::ast::edit::{
 use crate::blast_radius::impact_matrix::CoverageReport;
 use crate::graph::query::{GraphQueryEngine, VerificationSurface};
 use crate::graph::schema::{ChronosNode, EdgeKind, NodeKind};
+use crate::lsp::{
+    byte_offset_to_utf16_position, resolve_references_hybrid, DEFAULT_LSP_QUERY_TIMEOUT,
+};
 use crate::session::WorkspaceSession;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -71,6 +74,8 @@ pub struct RefactorSymbolRequest {
     pub dry_run: bool,
     #[serde(default)]
     pub force: bool,
+    #[serde(default)]
+    pub use_lsp: bool,
 }
 
 /// A classified AST occurrence discovered during fresh usage/rename analysis.
@@ -131,7 +136,13 @@ pub async fn execute_refactor_symbol(
 
     match req.action {
         RefactorAction::PreviewUsages => {
-            let analysis = collect_usage_classification(session, &resolved)?;
+            let mut analysis = collect_usage_classification(session, &resolved)?;
+            let mut blockers = Vec::new();
+            if req.use_lsp && !analysis.candidate_sites.is_empty() {
+                if let Some(note) = promote_candidates_via_lsp(session, &resolved, &mut analysis).await {
+                    blockers.push(note);
+                }
+            }
             let mut surfaces = Vec::new();
             if let Some(ref gnode) = resolved.graph_node {
                 surfaces = GraphQueryEngine::new(&session.graph).trace_verification_surfaces(&gnode.id, 5);
@@ -156,7 +167,7 @@ pub async fn execute_refactor_symbol(
                 verified_edits: analysis.verified_sites,
                 candidate_sites: analysis.candidate_sites,
                 files_modified: Vec::new(),
-                blockers: Vec::new(),
+                blockers,
                 verification_surfaces: surfaces,
                 unified_diff: String::new(),
             })
@@ -210,7 +221,11 @@ async fn execute_rename(
         ));
     }
 
-    let analysis = collect_usage_classification(session, &resolved)?;
+    let mut analysis = collect_usage_classification(session, &resolved)?;
+    let mut lsp_fallback_note: Option<String> = None;
+    if req.use_lsp && !analysis.candidate_sites.is_empty() {
+        lsp_fallback_note = promote_candidates_via_lsp(session, &resolved, &mut analysis).await;
+    }
     if analysis.verified_sites.is_empty() {
         return Err(anyhow!(
             "Could not locate declaration identifier span to rename for symbol '{}' in '{}'",
@@ -290,6 +305,9 @@ async fn execute_rename(
 
     let combined_diff = diff_chunks.join("\n");
     let mut blockers = Vec::new();
+    if let Some(note) = lsp_fallback_note {
+        blockers.push(note);
+    }
     if !analysis.candidate_sites.is_empty() {
         blockers.push(format!(
             "{} unverified/ambiguous candidate site(s) detected (member accesses or shadowed locals)",
@@ -675,6 +693,70 @@ struct UsageAnalysis {
     homonyms: usize,
     unresolved_calls: usize,
     file_sources: HashMap<PathBuf, String>,
+}
+
+/// Promote ambiguous `candidate_sites` matched by compiler LSP `textDocument/references` into `verified_sites`.
+/// Returns `Some(fallback_note)` if LSP fell back to `AstSemanticAdapter`.
+async fn promote_candidates_via_lsp(
+    session: &WorkspaceSession,
+    resolved: &ResolvedTarget,
+    analysis: &mut UsageAnalysis,
+) -> Option<String> {
+    let target_span = resolved
+        .fresh_symbol
+        .name_ident_span
+        .unwrap_or(resolved.fresh_symbol.declaration_span);
+    let (line_zero, col_utf16) =
+        byte_offset_to_utf16_position(&resolved.fresh_file.source, target_span.start_byte);
+    let target_rel = to_rel_display(&session.workspace_root, &resolved.fresh_file.abs_path);
+
+    let lsp = resolve_references_hybrid(
+        session,
+        &resolved.fresh_file.abs_path,
+        &resolved.fresh_file.source,
+        line_zero,
+        col_utf16,
+        &resolved.fresh_symbol.name,
+        Some(&target_rel),
+        DEFAULT_LSP_QUERY_TIMEOUT,
+    )
+    .await;
+
+    if lsp.used_fallback {
+        return lsp.fallback_reason;
+    }
+
+    let mut remaining = Vec::with_capacity(analysis.candidate_sites.len());
+    let mut promoted_count = 0usize;
+
+    for mut site in analysis.candidate_sites.drain(..) {
+        let matched = lsp.references.iter().any(|r| {
+            r.file == site.file
+                && (r.start_byte == Some(site.start_byte)
+                    || (r.line == site.line && r.column == site.col))
+        });
+        if matched {
+            site.kind = "lsp_verified_reference".to_string();
+            site.reason = format!(
+                "Promoted from ambiguous AST candidate via compiler LSP ({})",
+                lsp.adapter_name
+            );
+            analysis.verified_sites.push(site);
+            promoted_count += 1;
+        } else {
+            remaining.push(site);
+        }
+    }
+
+    analysis.candidate_sites = remaining;
+    analysis.unresolved_calls = analysis.unresolved_calls.saturating_sub(promoted_count);
+    for (idx, site) in analysis.verified_sites.iter_mut().enumerate() {
+        site.index = idx + 1;
+    }
+    for (idx, site) in analysis.candidate_sites.iter_mut().enumerate() {
+        site.index = idx + 1;
+    }
+    None
 }
 
 fn collect_usage_classification(
@@ -1415,6 +1497,7 @@ mod tests {
                 file: Some(math_file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1464,6 +1547,7 @@ mod tests {
                 file: Some(a_file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1483,6 +1567,7 @@ mod tests {
                 file: Some(a_file.clone()),
                 dry_run: false,
                 force: true,
+                use_lsp: false,
             },
         )
         .await
@@ -1518,6 +1603,7 @@ mod tests {
                 file: Some(file1.clone()),
                 dry_run: false,
                 force: true,
+                use_lsp: false,
             },
         )
         .await
@@ -1552,6 +1638,7 @@ mod tests {
                 file: Some(file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1569,6 +1656,7 @@ mod tests {
                 file: Some(file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1602,6 +1690,7 @@ mod tests {
                 file: Some(file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1644,6 +1733,7 @@ mod tests {
                 file: Some(math_file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1685,6 +1775,7 @@ mod tests {
                 file: Some(file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1705,6 +1796,7 @@ mod tests {
                 file: Some(file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1747,6 +1839,7 @@ mod tests {
                 file: Some(file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1767,6 +1860,7 @@ mod tests {
                 file: Some(file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1803,6 +1897,7 @@ mod tests {
                 file: Some(store_file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await
@@ -1823,6 +1918,7 @@ mod tests {
                 file: Some(store_file.clone()),
                 dry_run: false,
                 force: false,
+                use_lsp: false,
             },
         )
         .await

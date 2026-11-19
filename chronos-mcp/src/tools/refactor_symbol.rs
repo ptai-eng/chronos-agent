@@ -53,6 +53,11 @@ pub async fn handle_refactor_symbol(state: SharedState, params: Option<Value>) -
         .and_then(|p| p.get("force"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let use_lsp = params
+        .as_ref()
+        .and_then(|p| p.get("use_lsp"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     // Ensure graph is populated before multi-file cross-reference analysis on cold start
     {
@@ -75,6 +80,7 @@ pub async fn handle_refactor_symbol(state: SharedState, params: Option<Value>) -
         file,
         dry_run,
         force,
+        use_lsp,
     };
 
     let mut st = state.write().await;
