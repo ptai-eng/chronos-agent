@@ -13,7 +13,11 @@
 //!    visibility (`pub`/`export` under incomplete coverage), and Rust trait impl guards.
 
 use crate::ast::atomic_writer::AtomicFileWriter;
-use crate::ast::edit::{generate_unified_diff, apply_edits_in_memory, FreshParsedFile, FreshSymbolSpan, TextEdit};
+use crate::ast::dispatcher::LanguageDispatcher;
+use crate::ast::edit::{
+    apply_edits_in_memory, extract_go_method_sig, find_go_interface_match_in_tree,
+    generate_unified_diff, FreshParsedFile, FreshSymbolSpan, TextEdit,
+};
 use crate::blast_radius::impact_matrix::CoverageReport;
 use crate::graph::query::{GraphQueryEngine, VerificationSurface};
 use crate::graph::schema::{ChronosNode, EdgeKind, NodeKind};
@@ -441,11 +445,29 @@ async fn execute_safe_delete(
             resolved.fresh_symbol.name
         ));
     }
-    if resolved.fresh_symbol.is_trait_impl {
+    if let Some(reason) = &resolved.fresh_symbol.interface_impl_reason {
+        blockers.push(format!("{reason} cannot be safely deleted automatically"));
+    } else if resolved.fresh_symbol.is_trait_impl {
         blockers.push(format!(
             "Rust trait implementation method '{}' cannot be safely deleted automatically",
             resolved.fresh_symbol.name
         ));
+    } else if resolved
+        .fresh_file
+        .abs_path
+        .extension()
+        .and_then(|e| e.to_str())
+        == Some("go")
+    {
+        if let Some(reason) = find_cross_file_go_interface_match(
+            session,
+            &resolved.fresh_file.abs_path,
+            &resolved.fresh_file.source,
+            resolved.fresh_symbol.declaration_span.start_byte,
+            resolved.fresh_symbol.declaration_span.end_byte,
+        ) {
+            blockers.push(format!("{reason} cannot be safely deleted automatically"));
+        }
     }
     if resolved.fresh_symbol.is_exported && coverage.completeness != "complete" {
         blockers.push(format!(
@@ -582,6 +604,69 @@ async fn execute_safe_delete(
             resolved.fresh_symbol.name
         ),
     })
+}
+
+/// Inspect sibling `.go` files (and indexed `.go` files in the graph) to detect structural Go interface satisfaction.
+fn find_cross_file_go_interface_match(
+    session: &WorkspaceSession,
+    target_abs: &Path,
+    target_source: &str,
+    decl_start: usize,
+    decl_end: usize,
+) -> Option<String> {
+    let lang = LanguageDispatcher::language_for_path(target_abs).ok()?;
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&lang).ok()?;
+    let tree = parser.parse(target_source, None)?;
+
+    let mut decl_node = tree
+        .root_node()
+        .descendant_for_byte_range(decl_start, decl_end)?;
+    while decl_node.kind() != "method_declaration" {
+        decl_node = decl_node.parent()?;
+    }
+    let (method_name, param_count) = extract_go_method_sig(decl_node, target_source.as_bytes())?;
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(parent_dir) = target_abs.parent() {
+        if let Ok(entries) = std::fs::read_dir(parent_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|e| e.to_str()) == Some("go") && p != target_abs {
+                    candidates.push(p);
+                }
+            }
+        }
+    }
+    for n in session.graph.all_nodes() {
+        if n.location.file.ends_with(".go") {
+            let abs = session.workspace_root.join(&n.location.file);
+            if abs != target_abs && !candidates.contains(&abs) {
+                candidates.push(abs);
+            }
+        }
+    }
+
+    for go_file in candidates {
+        let Ok(src) = std::fs::read_to_string(&go_file) else {
+            continue;
+        };
+        if !src.contains(&method_name) {
+            continue;
+        }
+        let Some(other_tree) = parser.parse(&src, None) else {
+            continue;
+        };
+        if let Some(found) = find_go_interface_match_in_tree(
+            other_tree.root_node(),
+            src.as_bytes(),
+            &method_name,
+            param_count,
+        ) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 struct UsageAnalysis {
@@ -1571,5 +1656,180 @@ mod tests {
             "Module path 'crate::math' must stay intact, got: {app_after}"
         );
         assert!(app_after.contains("compute_math(5)"));
+    }
+
+    #[tokio::test]
+    async fn test_safe_delete_guards_typescript_implements_and_allows_private_helper() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("src").join("gateway.ts");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+
+        let src = concat!(
+            "interface PaymentGateway { charge(cents: number): boolean; }\n",
+            "class StripePay implements PaymentGateway {\n",
+            "  charge(cents: number): boolean { return cents > 0; }\n",
+            "  private debugTrace(): number { return 1; }\n",
+            "}\n"
+        );
+        std::fs::write(&file, src).unwrap();
+
+        let mut session = WorkspaceSession::open_in_memory(dir.path().to_path_buf(), false);
+        session.ensure_indexed(None, 100).unwrap();
+
+        let blocked = execute_refactor_symbol(
+            &mut session,
+            RefactorSymbolRequest {
+                symbol: "StripePay.charge".to_string(),
+                action: RefactorAction::SafeDelete,
+                new_name: None,
+                file: Some(file.clone()),
+                dry_run: false,
+                force: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(blocked.status, "blocked_active_dependents");
+        assert!(
+            blocked.blockers.iter().any(|b| b.contains("PaymentGateway")),
+            "Expected PaymentGateway blocker, got: {:?}",
+            blocked.blockers
+        );
+
+        let allowed_private = execute_refactor_symbol(
+            &mut session,
+            RefactorSymbolRequest {
+                symbol: "StripePay.debugTrace".to_string(),
+                action: RefactorAction::SafeDelete,
+                new_name: None,
+                file: Some(file.clone()),
+                dry_run: false,
+                force: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            allowed_private.status, "applied",
+            "Private helper should delete safely, blockers: {:?}",
+            allowed_private.blockers
+        );
+        let after = std::fs::read_to_string(&file).unwrap();
+        assert!(!after.contains("debugTrace"));
+        assert!(after.contains("charge(cents: number)"));
+    }
+
+    #[tokio::test]
+    async fn test_safe_delete_guards_java_override_and_implements() {
+        let dir = tempfile::tempdir().unwrap();
+        let iface_file = dir.path().join("Job.java");
+        let file = dir.path().join("Worker.java");
+
+        std::fs::write(&iface_file, "interface Job { void run(); }\n").unwrap();
+        let src = concat!(
+            "class Worker implements Job {\n",
+            "  @Override\n",
+            "  public void run() {}\n",
+            "  private void unusedLocalHelper() {}\n",
+            "}\n"
+        );
+        std::fs::write(&file, src).unwrap();
+
+        let mut session = WorkspaceSession::open_in_memory(dir.path().to_path_buf(), false);
+        session.ensure_indexed(None, 100).unwrap();
+
+        let blocked = execute_refactor_symbol(
+            &mut session,
+            RefactorSymbolRequest {
+                symbol: "Worker.run".to_string(),
+                action: RefactorAction::SafeDelete,
+                new_name: None,
+                file: Some(file.clone()),
+                dry_run: false,
+                force: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(blocked.status, "blocked_active_dependents");
+        assert!(
+            blocked.blockers.iter().any(|b| b.contains("@Override")),
+            "Expected @Override blocker, got: {:?}",
+            blocked.blockers
+        );
+
+        let allowed = execute_refactor_symbol(
+            &mut session,
+            RefactorSymbolRequest {
+                symbol: "Worker.unusedLocalHelper".to_string(),
+                action: RefactorAction::SafeDelete,
+                new_name: None,
+                file: Some(file.clone()),
+                dry_run: false,
+                force: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(allowed.status, "applied", "Blockers: {:?}", allowed.blockers);
+    }
+
+    #[tokio::test]
+    async fn test_safe_delete_guards_go_interface_cross_file_and_allows_unmatched() {
+        let dir = tempfile::tempdir().unwrap();
+        let iface_file = dir.path().join("iface.go");
+        let store_file = dir.path().join("store.go");
+
+        std::fs::write(
+            &iface_file,
+            "package store\n\ntype Saver interface {\n\tSave(key string, val int) error\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &store_file,
+            "package store\n\ntype MemStore struct{}\n\nfunc (m *MemStore) Save(key, val string) error {\n\treturn nil\n}\n\nfunc (m *MemStore) unusedDebug() int {\n\treturn 42\n}\n",
+        )
+        .unwrap();
+
+        let mut session = WorkspaceSession::open_in_memory(dir.path().to_path_buf(), false);
+        session.ensure_indexed(None, 100).unwrap();
+
+        let blocked = execute_refactor_symbol(
+            &mut session,
+            RefactorSymbolRequest {
+                symbol: "Save".to_string(),
+                action: RefactorAction::SafeDelete,
+                new_name: None,
+                file: Some(store_file.clone()),
+                dry_run: false,
+                force: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(blocked.status, "blocked_active_dependents");
+        assert!(
+            blocked.blockers.iter().any(|b| b.contains("Saver.Save")),
+            "Expected Saver.Save interface blocker, got: {:?}",
+            blocked.blockers
+        );
+
+        let allowed = execute_refactor_symbol(
+            &mut session,
+            RefactorSymbolRequest {
+                symbol: "unusedDebug".to_string(),
+                action: RefactorAction::SafeDelete,
+                new_name: None,
+                file: Some(store_file.clone()),
+                dry_run: false,
+                force: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(allowed.status, "applied", "Blockers: {:?}", allowed.blockers);
+        let after = std::fs::read_to_string(&store_file).unwrap();
+        assert!(!after.contains("unusedDebug"));
+        assert!(after.contains("func (m *MemStore) Save"));
     }
 }

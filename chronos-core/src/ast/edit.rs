@@ -164,6 +164,8 @@ pub struct FreshSymbolSpan {
     pub is_exported: bool,
     pub has_entrypoint_attr: bool,
     pub is_trait_impl: bool,
+    #[serde(default)]
+    pub interface_impl_reason: Option<String>,
 }
 
 /// Fresh-from-disk parse result combining Tree-sitter CST spans and `ParsedModule`.
@@ -319,13 +321,15 @@ pub fn locate_symbol_with_trivia(
             is_exported: false,
             has_entrypoint_attr,
             is_trait_impl: false,
+            interface_impl_reason: None,
         };
     };
 
     let declaration_span = ByteSpan::from_ts_node(decl_node);
     let enclosing_type = find_enclosing_type_name(decl_node, source.as_bytes());
     let name_ident_span = find_name_ident_span(decl_node).map(ByteSpan::from_ts_node);
-    let is_trait_impl = has_trait_impl_ancestor(decl_node);
+    let interface_impl_reason = detect_interface_or_override_guard(tree.root_node(), decl_node, source);
+    let is_trait_impl = interface_impl_reason.is_some();
 
     // Handle wrapping syntax nodes (`decorated_definition`, single `lexical_declaration`, `export_statement`)
     let mut anchor = decl_node;
@@ -450,6 +454,7 @@ pub fn locate_symbol_with_trivia(
         is_exported,
         has_entrypoint_attr,
         is_trait_impl,
+        interface_impl_reason,
     }
 }
 
@@ -583,14 +588,341 @@ fn find_name_ident_span(decl_node: tree_sitter::Node<'_>) -> Option<tree_sitter:
     None
 }
 
-fn has_trait_impl_ancestor(mut node: tree_sitter::Node<'_>) -> bool {
+fn detect_interface_or_override_guard(
+    file_root: tree_sitter::Node<'_>,
+    decl_node: tree_sitter::Node<'_>,
+    source: &str,
+) -> Option<String> {
+    let bytes = source.as_bytes();
+
+    // 1. Rust trait `impl Trait for Type`
+    if let Some(trait_name) = find_rust_trait_impl_name(decl_node, bytes) {
+        return Some(format!("Rust trait implementation method ('{trait_name}')"));
+    }
+
+    // 2. TypeScript `override` modifier or enclosing class `implements` clause
+    if decl_node.kind() == "method_definition" {
+        if has_child_kind(decl_node, "override_modifier") {
+            return Some("TypeScript method carries 'override' modifier".to_string());
+        }
+        let method_name = decl_node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(bytes).ok())
+            .unwrap_or("");
+        let is_private_or_static = method_name.starts_with('#')
+            || has_ts_private_or_static(decl_node, bytes);
+        if !is_private_or_static && !method_name.is_empty() {
+            if let Some(implements_names) = find_ts_implements_names(decl_node, bytes) {
+                let local_decl_matches =
+                    check_local_ts_interface_methods(file_root, bytes, &implements_names, method_name);
+                if local_decl_matches {
+                    return Some(format!(
+                        "TypeScript class method '{method_name}' implements interface '{}'",
+                        implements_names.join(", ")
+                    ));
+                }
+            }
+        }
+    }
+
+    // 3. Java `@Override` annotation or enclosing class `implements` clause
+    if decl_node.kind() == "method_declaration" && decl_node.child_by_field_name("receiver").is_none()
+    {
+        if has_java_override_annotation(decl_node, bytes) {
+            return Some("Java method carries @Override annotation".to_string());
+        }
+        if !has_java_private_or_static(decl_node, bytes) {
+            if let Some(ifaces) = find_java_super_interfaces(decl_node, bytes) {
+                return Some(format!("Java class implements interface(s) '{ifaces}'"));
+            }
+        }
+    }
+
+    // 4. Go receiver `method_declaration` matching a same-file `interface_type` (`method_elem`)
+    if decl_node.kind() == "method_declaration" && decl_node.child_by_field_name("receiver").is_some()
+    {
+        if let Some((method_name, param_count)) = extract_go_method_sig(decl_node, bytes) {
+            if let Some(iface) =
+                find_go_interface_match_in_tree(file_root, bytes, &method_name, param_count)
+            {
+                return Some(iface);
+            }
+        }
+    }
+
+    None
+}
+
+fn find_rust_trait_impl_name(mut node: tree_sitter::Node<'_>, bytes: &[u8]) -> Option<String> {
     while let Some(parent) = node.parent() {
-        if parent.kind() == "impl_item" && parent.child_by_field_name("trait").is_some() {
-            return true;
+        if parent.kind() == "impl_item" {
+            if let Some(trait_node) = parent.child_by_field_name("trait") {
+                return Some(
+                    trait_node
+                        .utf8_text(bytes)
+                        .unwrap_or("Trait")
+                        .trim()
+                        .to_string(),
+                );
+            }
         }
         node = parent;
     }
+    None
+}
+
+fn has_child_kind(node: tree_sitter::Node<'_>, kind: &str) -> bool {
+    let mut cursor = node.walk();
+    let found = node.children(&mut cursor).any(|c| c.kind() == kind);
+    found
+}
+
+fn has_ts_private_or_static(method_node: tree_sitter::Node<'_>, bytes: &[u8]) -> bool {
+    let mut cursor = method_node.walk();
+    for child in method_node.children(&mut cursor) {
+        if child.kind() == "private_property_identifier" {
+            return true;
+        }
+        if child.kind() == "accessibility_modifier" {
+            if child.utf8_text(bytes).map(|t| t.trim() == "private").unwrap_or(false) {
+                return true;
+            }
+        }
+        if child.kind() == "static" {
+            return true;
+        }
+    }
     false
+}
+
+fn find_ts_implements_names(mut node: tree_sitter::Node<'_>, bytes: &[u8]) -> Option<Vec<String>> {
+    while let Some(parent) = node.parent() {
+        if matches!(parent.kind(), "class_declaration" | "abstract_class_declaration") {
+            let mut c_cur = parent.walk();
+            for child in parent.children(&mut c_cur) {
+                if child.kind() == "class_heritage" {
+                    let mut h_cur = child.walk();
+                    for clause in child.children(&mut h_cur) {
+                        if clause.kind() == "implements_clause" {
+                            let text = clause.utf8_text(bytes).unwrap_or("");
+                            let raw = text.trim().strip_prefix("implements").unwrap_or(text);
+                            let names: Vec<String> = raw
+                                .split(',')
+                                .map(|s| s.split('<').next().unwrap_or(s).trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .collect();
+                            if !names.is_empty() {
+                                return Some(names);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        node = parent;
+    }
+    None
+}
+
+/// Returns `true` if either an implemented interface in this file explicitly declares `method_name`,
+/// OR none of the implemented interfaces are defined in this file (imported interface).
+fn check_local_ts_interface_methods(
+    root: tree_sitter::Node<'_>,
+    bytes: &[u8],
+    implements_names: &[String],
+    method_name: &str,
+) -> bool {
+    let mut found_any_local_iface = false;
+    let mut matched = false;
+    let mut cursor = root.walk();
+    for child in root.children(&mut cursor) {
+        let iface_node = if child.kind() == "interface_declaration" {
+            Some(child)
+        } else if child.kind() == "export_statement" {
+            child
+                .child_by_field_name("declaration")
+                .filter(|d| d.kind() == "interface_declaration")
+        } else {
+            None
+        };
+        let Some(iface) = iface_node else { continue };
+        let Some(iface_name) = iface
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(bytes).ok())
+        else {
+            continue;
+        };
+        if !implements_names
+            .iter()
+            .any(|imp| imp == iface_name || imp.ends_with(&format!(".{iface_name}")))
+        {
+            continue;
+        }
+        found_any_local_iface = true;
+        if let Some(body) = iface.child_by_field_name("body") {
+            let mut b_cur = body.walk();
+            for member in body.children(&mut b_cur) {
+                if member
+                    .child_by_field_name("name")
+                    .and_then(|n| n.utf8_text(bytes).ok())
+                    .map(|n| n == method_name)
+                    .unwrap_or(false)
+                {
+                    matched = true;
+                }
+            }
+        }
+    }
+    !found_any_local_iface || matched
+}
+
+fn has_java_override_annotation(method_node: tree_sitter::Node<'_>, bytes: &[u8]) -> bool {
+    let mut cursor = method_node.walk();
+    for child in method_node.children(&mut cursor) {
+        if matches!(child.kind(), "marker_annotation" | "annotation")
+            && annotation_is_override(child, bytes)
+        {
+            return true;
+        }
+        if child.kind() == "modifiers" {
+            let mut m_cur = child.walk();
+            for m in child.children(&mut m_cur) {
+                if matches!(m.kind(), "marker_annotation" | "annotation")
+                    && annotation_is_override(m, bytes)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn annotation_is_override(node: tree_sitter::Node<'_>, bytes: &[u8]) -> bool {
+    node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(bytes).ok())
+        .map(|name| name == "Override" || name.ends_with(".Override"))
+        .unwrap_or(false)
+}
+
+fn has_java_private_or_static(method_node: tree_sitter::Node<'_>, bytes: &[u8]) -> bool {
+    let mut cursor = method_node.walk();
+    for child in method_node.children(&mut cursor) {
+        if child.kind() == "modifiers" {
+            let text = child.utf8_text(bytes).unwrap_or("");
+            if text.split_whitespace().any(|tok| tok == "private" || tok == "static") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn find_java_super_interfaces(mut node: tree_sitter::Node<'_>, bytes: &[u8]) -> Option<String> {
+    while let Some(parent) = node.parent() {
+        if matches!(
+            parent.kind(),
+            "class_declaration" | "enum_declaration" | "record_declaration"
+        ) {
+            if let Some(ifaces) = parent.child_by_field_name("interfaces") {
+                let text = ifaces.utf8_text(bytes).unwrap_or("").trim();
+                let cleaned = text.strip_prefix("implements").unwrap_or(text).trim();
+                if !cleaned.is_empty() {
+                    return Some(cleaned.to_string());
+                }
+            }
+        }
+        node = parent;
+    }
+    None
+}
+
+/// Extract `(method_name, parameter_count)` from a Go `method_declaration` (receiver method).
+pub(crate) fn extract_go_method_sig(
+    method_node: tree_sitter::Node<'_>,
+    bytes: &[u8],
+) -> Option<(String, usize)> {
+    if method_node.kind() != "method_declaration"
+        || method_node.child_by_field_name("receiver").is_none()
+    {
+        return None;
+    }
+    let name = method_node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(bytes).ok())?
+        .trim()
+        .to_string();
+    let params = method_node.child_by_field_name("parameters")?;
+    Some((name, count_go_parameter_list(params)))
+}
+
+fn count_go_parameter_list(param_list: tree_sitter::Node<'_>) -> usize {
+    let mut count = 0usize;
+    let mut cursor = param_list.walk();
+    for child in param_list.children(&mut cursor) {
+        match child.kind() {
+            "parameter_declaration" => {
+                // `a, b int` has 2 `identifier` children (`name` fields); `int` alone has 0 `identifier` children -> 1 param.
+                let mut idents = 0usize;
+                let mut p_cur = child.walk();
+                for sub in child.children(&mut p_cur) {
+                    if sub.kind() == "identifier" {
+                        idents += 1;
+                    }
+                }
+                count += idents.max(1);
+            }
+            "variadic_parameter_declaration" => {
+                count += 1;
+            }
+            _ => {}
+        }
+    }
+    count
+}
+
+/// Search `tree_root` for any Go `interface_type` whose `method_elem` matches `(method_name, param_count)`.
+pub(crate) fn find_go_interface_match_in_tree(
+    node: tree_sitter::Node<'_>,
+    bytes: &[u8],
+    method_name: &str,
+    param_count: usize,
+) -> Option<String> {
+    if node.kind() == "interface_type" {
+        let iface_name = node
+            .parent()
+            .filter(|p| p.kind() == "type_spec")
+            .and_then(|p| p.child_by_field_name("name"))
+            .and_then(|n| n.utf8_text(bytes).ok())
+            .unwrap_or("interface");
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "method_elem" {
+                let elem_name = child
+                    .child_by_field_name("name")
+                    .and_then(|n| n.utf8_text(bytes).ok())
+                    .unwrap_or("");
+                let elem_params = child
+                    .child_by_field_name("parameters")
+                    .map(count_go_parameter_list)
+                    .unwrap_or(0);
+                if elem_name == method_name && elem_params == param_count {
+                    return Some(format!(
+                        "Go receiver method '{method_name}' matches interface '{iface_name}.{method_name}'"
+                    ));
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(found) = find_go_interface_match_in_tree(child, bytes, method_name, param_count) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 fn has_visibility_export(decl_node: tree_sitter::Node<'_>, source: &str, name: &str) -> bool {
