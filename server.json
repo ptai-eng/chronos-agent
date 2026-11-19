@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ptai-eng/chronos-agent",
+  "title": "CHRONOS-AGENT",
+  "description": "5D living code graph, AST symbol editing, refactoring & blast-radius gate in 1 Rust binary",
+  "repository": {
+    "url": "https://github.com/ptai-eng/chronos-agent",
+    "source": "github",
+    "id": "1346047813"
+  },
+  "version": "1.8.0",
+  "websiteUrl": "https://github.com/ptai-eng/chronos-agent",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/ptai-eng/chronos-agent:1.8.0",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
