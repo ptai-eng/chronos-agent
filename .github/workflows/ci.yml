@@ -15,9 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Verify cross-package version parity
+        run: python3 scripts/check_version_sync.py
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

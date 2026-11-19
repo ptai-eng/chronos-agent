@@ -8,12 +8,12 @@
     "source": "github",
     "id": "1346047813"
   },
-  "version": "1.8.0",
+  "version": "1.8.1",
   "websiteUrl": "https://github.com/ptai-eng/chronos-agent",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/ptai-eng/chronos-agent:1.8.0",
+      "identifier": "ghcr.io/ptai-eng/chronos-agent:1.8.1",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"

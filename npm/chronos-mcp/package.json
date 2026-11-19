@@ -1,6 +1,6 @@
 {
   "name": "@ptai-eng/chronos-mcp",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "mcpName": "io.github.ptai-eng/chronos-agent",
   "description": "Zero-build npx launcher for CHRONOS-AGENT (chronos-mcp & chronos CLI): fresh-parse AST symbol editing, edge-verified refactoring, 5D code graph & sandboxed Rhai scripting.",
   "license": "MIT",

@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  packages: write
+  id-token: write
 
 jobs:
   build:
@@ -28,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -70,7 +72,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -104,7 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all workflow run artifacts
         uses: actions/download-artifact@v4
@@ -112,10 +114,10 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Generate SHA256SUMS.txt
+      - name: Generate SHA256SUMS.txt & Homebrew Formula
         run: |
-          cd artifacts
-          sha256sum chronos-* > SHA256SUMS.txt || true
+          (cd artifacts && sha256sum chronos-* > SHA256SUMS.txt || true)
+          python3 scripts/render_homebrew_formula.py --version "${{ github.ref_name }}" --sums artifacts/SHA256SUMS.txt --out artifacts/chronos.rb || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -124,3 +126,81 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-mcp-registry:
+    name: Build GHCR Image & Publish MCP Registry
+    needs: [release]
+    runs-on: ubuntu-latest
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.9
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Resolve version & repository slug
+        id: meta
+        run: |
+          repo=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          tag="${{ github.ref_name }}"
+          version="${tag#v}"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push GHCR container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            CHRONOS_VERSION=${{ steps.meta.outputs.tag }}
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.repo }}:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ steps.meta.outputs.repo }}:latest
+
+      - name: Sync server.json metadata
+        run: |
+          jq \
+            --arg v "${{ steps.meta.outputs.version }}" \
+            --arg img "ghcr.io/${{ steps.meta.outputs.repo }}:${{ steps.meta.outputs.version }}" \
+            '.version = $v | .packages[0].identifier = $img' \
+            server.json > server.tmp && mv server.tmp server.json
+          cat server.json
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          archive="mcp-publisher_${os}_${arch}.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+
+      - name: Authenticate via GitHub OIDC and publish
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

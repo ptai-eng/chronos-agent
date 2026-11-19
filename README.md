@@ -9,12 +9,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.8.0"><img src="https://img.shields.io/badge/Version-1.8.0-111827?style=flat-square" alt="Version 1.8.0"></a>
+  <a href="https://github.com/ptai-eng/chronos-agent/releases/tag/v1.8.1"><img src="https://img.shields.io/badge/Version-1.8.1-111827?style=flat-square" alt="Version 1.8.1"></a>
   <a href="https://www.npmjs.com/package/@ptai-eng/chronos-mcp"><img src="https://img.shields.io/npm/v/@ptai-eng/chronos-mcp?style=flat-square&color=CB3837&logo=npm&logoColor=white" alt="npm @ptai-eng/chronos-mcp"></a>
   <a href="https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.ptai-eng/chronos-agent"><img src="https://img.shields.io/badge/MCP%20Registry-io.github.ptai--eng%2Fchronos--agent-0F766E?style=flat-square" alt="Official MCP Registry"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=ptai-eng.chronos-agent"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-CHRONOS%20Agent-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-2021%20Edition-EB6C36?style=flat-square&logo=rust&logoColor=white" alt="Rust Edition"></a>
-  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-147%2F147%20Passing-1A7F5A?style=flat-square" alt="Tests 147/147 Passing"></a>
+  <a href="./chronos-core/tests"><img src="https://img.shields.io/badge/Tests-157%2F157%20Passing-1A7F5A?style=flat-square" alt="Tests 157/157 Passing"></a>
   <a href="https://spec.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-14%20Tools%20%28v2024--11--05%29-2E5AA8?style=flat-square" alt="MCP Protocol 14 Tools"></a>
   <a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Local--First-B42318?style=flat-square" alt="Local-First Security"></a>
   <a href="https://glama.ai/mcp/servers/ptai-eng/chronos-agent"><img src="https://glama.ai/mcp/servers/ptai-eng/chronos-agent/badges/score.svg" alt="Glama MCP Score"></a>
@@ -43,7 +43,7 @@ irm https://raw.githubusercontent.com/ptai-eng/chronos-agent/main/scripts/instal
 curl -fsSL https://raw.githubusercontent.com/ptai-eng/chronos-agent/main/scripts/install.sh | sh
 ```
 
-*(Other options: [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) via `cargo binstall --git https://github.com/ptai-eng/chronos-agent chronos-cli chronos-mcp`, or OCI container `docker run -i --rm -v "${PWD}:/workspace" ghcr.io/ptai-eng/chronos-agent:1.8.0` via the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.ptai-eng/chronos-agent).)*
+*(Other options: [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) via `cargo binstall --git https://github.com/ptai-eng/chronos-agent chronos-cli chronos-mcp`, [`packaging/homebrew/chronos.rb`](./packaging/homebrew/chronos.rb), or OCI container `docker run -i --rm -v "${PWD}:/workspace" ghcr.io/ptai-eng/chronos-agent:1.8.1` via the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.ptai-eng/chronos-agent).)*
 
 Bootstrap configs for Codex, Antigravity, Claude Code, Cursor, OpenCode, Windsurf, Copilot, and Cline in any workspace:
 
@@ -76,7 +76,7 @@ Or drop `@ptai-eng/chronos-mcp` (or `chronos-mcp`) directly into any MCP client 
 ## Table of Contents
 
 - [Why CHRONOS vs. Serena & Built-in Grep](#why-chronos-vs-serena--built-in-grep)
-- [What's New in v1.8.0](#whats-new-in-v180)
+- [What's New in v1.8.1 & v1.8.0](#whats-new-in-v181--v180)
 - [Core Architecture](#core-architecture)
 - [Capability Matrix](#capability-matrix)
 - [14 Canonical MCP Tools](#14-canonical-mcp-tools)
@@ -96,11 +96,19 @@ Coding agents normally inspect repositories with sequential `grep` + line-range 
 | **Symbol Editing Safety** | Trusts stale line numbers / diff hunks | LSP offsets + text rewrite | **Fresh Tree-sitter re-parse on every write + 2-Stage Gate** (`syntax_error` & `blocked_requires_force` when signature changes on callers) |
 | **Multi-File Rename** | Global text search/replace risks corrupting locals & comments | Compiler/LSP reference list | **AST identifier classification** separating `verified_edits` (`CALLS`/`TESTS`/imports) from `candidate_sites` (`obj.method()`, shadowed locals) + atomic rollback |
 | **Impact & Test Awareness** | None | Caller references when server is warm | **KuzuDB graph + Git co-change coupling + Reverse-BFS entrypoints (`verification_surfaces`) + Mutation testing** |
-| **Current Trade-off (`v1.8.0`)** | Zero semantic guarantees | Full compiler type resolution when LSP compiles cleanly | **Pure static Tree-sitter (`v1.8.0`):** dynamic `obj.method()` receivers go to `candidate_sites` for review instead of guessing; opt-in Hybrid LSP lands in [`v1.8.1`](./docs/ROADMAP-v1.8-SERENA-EXPANSION.md) |
+| **Hybrid Disambiguation (`v1.8.1`)** | Zero semantic guarantees | Full compiler type resolution when LSP compiles cleanly | **Default zero-daemon (`<15ms`), plus opt-in Hybrid `LspSemanticAdapter` (`use_lsp: true` / `chronos lsp-hydrate`):** disambiguates `obj.method()` candidates with graceful AST fallback |
 
 ---
 
-## What's New in v1.8.0
+## What's New in v1.8.1 & v1.8.0
+
+### `v1.8.1` Highlights
+- **Opt-In Hybrid `LspSemanticAdapter` & `chronos lsp-hydrate`:** Resolves `rust-analyzer`, `typescript-language-server` (`.cmd` wrapper on Windows), `pyright`, `gopls`, `clangd`, and `jdtls` over `Content-Length` stdio JSON-RPC with `60s`/`15s` timeouts, UTF-16 byte mapping, `use_lsp` promotion of `obj.method()` `candidate_sites`, and deterministic AST fallback (`coverage.completeness = "partial"`).
+- **Polyglot `safe_delete` Interface & Override Guards:** Blocks unsafe deletions across TypeScript (`implements` / `override`), Java (`@Override` / `implements`), and Go (structural cross-file `interface` satisfaction), in addition to Rust trait impls.
+- **MCP Spec & Token Optimization:** Suppresses illegal responses to JSON-RPC notifications, decodes `file://` Windows/POSIX `rootUri`s, negotiates MCP `protocolVersion` up to `2025-11-25`, emits `ToolAnnotations` (`readOnlyHint`, `destructiveHint`), and compacts `chronos_explore` payloads (**-69% to -72% estimated tokens** and **3x–4x fewer round-trips** vs. grep+read in [`benchmarks/`](./benchmarks/README.md)).
+- **Release Parity & Homebrew Formula:** Added [`scripts/check_version_sync.py`](./scripts/check_version_sync.py) CI guard and [`packaging/homebrew/chronos.rb`](./packaging/homebrew/chronos.rb).
+
+### `v1.8.0` Core Release
 
 `v1.8.0` turns `CHRONOS-AGENT` into a gated **read + edit + refactor + script** workspace engine across 7 language families (`.ts`/`.tsx`/`.js`/`.jsx`, `.py`, `.rs`, `.go`, `.c`/`.cpp`, `.java`):
 

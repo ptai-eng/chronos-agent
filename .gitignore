@@ -33,3 +33,8 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Generated benchmark artifacts & Python bytecode
+benchmarks/results.json
+__pycache__/
+*.py[cod]
