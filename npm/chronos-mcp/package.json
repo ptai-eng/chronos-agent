@@ -6,13 +6,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ptai-eng/chronos-agent.git",
+    "url": "git+https://github.com/ptai-eng/chronos-agent.git",
     "directory": "npm/chronos-mcp"
   },
   "homepage": "https://github.com/ptai-eng/chronos-agent",
   "bin": {
-    "chronos-mcp": "./bin/chronos-mcp.js",
-    "chronos": "./bin/chronos.js"
+    "chronos-mcp": "bin/chronos-mcp.js",
+    "chronos": "bin/chronos.js"
   },
   "files": [
     "bin/",
